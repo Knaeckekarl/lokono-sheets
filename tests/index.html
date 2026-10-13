@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Lokono Sheets – Tests</title>
+  <style>
+    body { font: 14px system-ui, sans-serif; margin: 20px; }
+    .ok { color: #1b7f3b; } .fail { color: #b3261e; font-weight: 700; }
+    #sandbox { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Tests</h1>
+  <p>Öffnen über den lokalen Server: <code>http://localhost:8000/tests/</code>. Die Tests nutzen einen eigenen Speicherbereich nicht – sie legen Test-Pokémon an und löschen sie wieder.</p>
+  <ul id="out"></ul>
+  <p id="summary"></p>
+  <div id="sandbox"></div>
+  <script type="module">
+    import { rollDie, roll, formatRoll, parseDice } from '../js/core/dice.js';
+    import {
+      DEFAULT_SETTINGS, diceClassFor, levelUp, undoLevelUp, expForNextLevel, possibleLevelUps, battleValue, heal,
+    } from '../js/core/rules.js';
+    import { getSpecies, getMoves } from '../js/core/data.js';
+    import { describeMoveEffects } from '../js/core/effects.js';
+    import { createPokemon, allowedGenders, learnableMoves } from '../js/core/model.js';
+    import { migrate } from '../js/core/migrate.js';
+    import { defensiveMatchups } from '../js/core/constants.js';
+    import { savePokemon, deletePokemon, saveTrainer, deleteTrainer } from '../js/core/store.js';
+
+    const out = document.getElementById('out');
+    let passed = 0, failed = 0;
+    const test = async (name, fn) => {
+      try { await fn(); passed++; out.insertAdjacentHTML('beforeend', `<li class="ok">✓ ${name}</li>`); }
+      catch (e) { failed++; out.insertAdjacentHTML('beforeend', `<li class="fail">✗ ${name}: ${e.message}</li>`); console.error(e); }
+    };
+    const eq = (a, b, msg = '') => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg} erwartet ${JSON.stringify(b)}, war ${JSON.stringify(a)}`); };
+    const ok = (c, msg) => { if (!c) throw new Error(msg); };
+
+    // ---------------- Würfel
+    await test('parseDice', () => { eq(parseDice('2W6'), { count: 2, sides: 6 }); eq(parseDice('1d10'), { count: 1, sides: 10 }); });
+    await test('1en werden neu gewürfelt, bis keine 1 fällt', () => {
+      const seq = [1, 1, 4]; const r = rollDie(6, { rng: () => seq.shift() });
+      eq(r.faces, [1, 1, 4]); eq(r.value, 4);
+    });
+    await test('ohne Reroll zählt die 1', () => eq(rollDie(6, { rerollOnes: false, rng: () => 1 }).value, 1));
+    await test('2W6 nie mit einer 1 pro Würfel (1000 Würfe)', () => {
+      for (let i = 0; i < 1000; i++) ok(roll('2W6').dice.every((d) => d.value >= 2), 'Würfel mit 1 gefunden');
+    });
+    await test('formatRoll zeigt alle Würfe', () => {
+      const r = { notation: '2W6', dice: [{ faces: [1, 4], value: 4 }, { faces: [5], value: 5 }], total: 9 };
+      eq(formatRoll(r), '2W6: [1→4] + [5] = 9');
+    });
+
+    // ---------------- Typen
+    await test('Schwächen: Kaumalat (Drache/Boden) ×4 gegen Eis, immun gegen Elektro', () => {
+      const m = defensiveMatchups(['dragon', 'ground']);
+      eq(m.ice, 4); eq(m.electric, 0); eq(m.fire, 0.5);
+    });
+
+    // ---------------- Würfelklassen
+    await test('Kanivanha (BST 305, Basisform mit Entwicklung) → 1W6', async () => eq(diceClassFor(await getSpecies(318)).dice, '1W6'));
+    await test('Mewtu (legendär) → 2W100', async () => eq(diceClassFor(await getSpecies(150)).dice, '2W100'));
+    await test('Knakrack ist auf 2W12 begrenzt oder darunter', async () => ok(['2W8', '2W10', '2W12'].includes(diceClassFor(await getSpecies(445)).dice), 'unerwartet'));
+
+    // ---------------- Levelup
+    await test('Levelup: Log, EXP, Stats, Undo', async () => {
+      const info = await getSpecies(318);
+      const pk = createPokemon(info, DEFAULT_SETTINGS, { level: 10 });
+      pk.exp = expForNextLevel(10) + 5;
+      const before = structuredClone(pk.stats);
+      const e = levelUp(pk, info, DEFAULT_SETTINGS);
+      ok(e, 'kein Levelup'); eq(pk.level, 11); eq(pk.exp, 5);
+      eq(e.rolls.length, 2);
+      const gained = Object.keys(before).reduce((s, k) => s + pk.stats[k] - before[k], 0);
+      eq(gained, e.rolls.reduce((s, r) => s + r.gain, 0), 'Summe der Erhöhungen');
+      ok(e.rolls[1].stat !== e.rolls[0].stat || e.rolls[1].kind === 'Sekundärwahl', 'Primär-/Sekundärlogik');
+      ok(e.rolls.every((r) => r.roll.dice.every((d) => d.value >= 2)), '1 im Ergebnis');
+      eq(levelUp(pk, info, DEFAULT_SETTINGS), null, 'zu wenig EXP');
+      undoLevelUp(pk); eq(pk.level, 10); eq(pk.stats, before);
+    });
+
+    // ---------------- Attacken-Effekte
+    await test('Effekt-Chancen aus Spieldaten', async () => {
+      const m = await getMoves();
+      eq(describeMoveEffects(m['ice-fang']), ['10 %: Einfrieren', '10 %: Zurückschrecken']);
+      eq(describeMoveEffects(m['crunch']), ['20 %: Vert. −1 (Ziel)']);
+      eq(describeMoveEffects(m['double-slap']), ['2–5 Treffer']);
+      eq(describeMoveEffects(m['toxic']), ['Schwere Vergiftung']);
+      eq(describeMoveEffects(m['tackle']), []);
+    });
+
+    // ---------------- Mengen-Levelup, Kampfwerte, Heilen
+    await test('possibleLevelUps', async () => {
+      const pk = createPokemon(await getSpecies(318), DEFAULT_SETTINGS, { level: 10 });
+      pk.exp = 100 + 121 + 5; eq(possibleLevelUps(pk), 2);
+      pk.exp = 99; eq(possibleLevelUps(pk), 0);
+    });
+    await test('Kampfwerte als Momentaufnahme + Heilen', async () => {
+      const pk = createPokemon(await getSpecies(318), DEFAULT_SETTINGS, { level: 20 });
+      pk.battle.mods.attack = 2;
+      eq(battleValue(pk, 'attack'), pk.stats.attack + 40);
+      eq(battleValue(pk, 'initiative'), null, 'ohne Wurf');
+      pk.battle.initiative = 12; pk.battle.mods.initiative = -1;
+      eq(battleValue(pk, 'initiative'), -8);
+      pk.currentHp = 1; pk.status = ['Verbrannt'];
+      const statsBefore = structuredClone(pk.stats);
+      heal(pk);
+      eq(pk.currentHp, pk.stats.hp); eq(pk.status, []); eq(pk.battle.initiative, null);
+      eq(pk.battle.mods.attack, 0); eq(pk.stats, statsBefore, 'Statuswerte unverändert');
+    });
+
+    // ---------------- Sperre für untypische Änderungen
+    await test('Arttypisch: Lernset & Geschlechter', async () => {
+      const info = await getSpecies(318);
+      const learn = learnableMoves(info);
+      ok(learn.has('bite') && !learn.has('flamethrower'), 'Lernset falsch');
+      eq(allowedGenders(await getSpecies(81)), ['neutral'], 'Magnetilo');
+      eq(createPokemon(info, DEFAULT_SETTINGS).unlocked, false, 'Standard gesperrt');
+    });
+
+    // ---------------- Migration alter Dateien (nur lokal, pokelogs ist nicht im Repo)
+    await test('Alter Trainer-Export wird übernommen', async () => {
+      const r = await fetch('../pokelogs/sesh08/Trainer_Fenna_2026-07-31.json');
+      if (!r.ok) return out.insertAdjacentHTML('beforeend', '<li>– pokelogs nicht vorhanden, übersprungen</li>');
+      const m = await migrate(JSON.parse((await r.text()).replace(/^﻿/, '')));
+      eq(m.trainers.length, 1); eq(m.pokemon.length, 4);
+      const hai = m.pokemon.find((p) => p.nickname === 'Haipirinha');
+      eq(hai.speciesId, 318); eq(hai.level, 21); eq(hai.moves, ['ice-fang', 'poison-fang', 'bite', 'aqua-jet']);
+      eq(hai.abilities, ['rough-skin', 'swift-swim', 'speed-boost']);
+      eq(typeof hai.friendship, 'number');
+    });
+
+    // ---------------- Views rendern ohne Fehler
+    await test('Pokémon- und Trainer-Bogen rendern', async () => {
+      const sandbox = document.getElementById('sandbox');
+      const info = await getSpecies(443);
+      const pk = createPokemon(info, DEFAULT_SETTINGS, { nickname: '__test__' });
+      const t = { id: 'tr___test__', name: '__test__', team: [] };
+      saveTrainer(t); pk.trainerId = t.id; savePokemon(pk);
+      try {
+        await (await import('../js/views/pokemon.js')).render(sandbox, pk.uuid);
+        ok(sandbox.querySelectorAll('.trait-val').length === 6, 'Statuswerte fehlen');
+        ok(sandbox.querySelector('.matchups'), 'Schwächenübersicht fehlt');
+        ok(sandbox.querySelector('[data-f="types.0"]').disabled, 'Typ sollte gesperrt sein');
+        ok(sandbox.querySelector('[data-f="levelUp.diceOverride"]').disabled, 'Würfelklasse sollte gesperrt sein');
+        eq(sandbox.querySelector('[data-move="0"]').getAttribute('list'), 'move-dl-species');
+        const sw = sandbox.querySelector('[data-f="unlocked"]');
+        sw.checked = true; sw.dispatchEvent(new Event('change', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 50));
+        ok(!sandbox.querySelector('[data-f="types.0"]').disabled, 'Typ sollte nach Freischalten änderbar sein');
+        eq(sandbox.querySelector('[data-move="0"]').getAttribute('list'), 'move-dl');
+        // Kampfwerte: + ändert nur die Anzeige
+        const atk = pk.stats.attack;
+        sandbox.querySelector('[data-bmod="attack"][data-step="1"]').click();
+        ok(sandbox.querySelector('.bt-val.up'), 'Kampfwert nicht erhöht');
+        const saved = (await import('../js/core/store.js')).getPokemon(pk.uuid);
+        eq(saved.stats.attack, atk, 'Statuswert darf sich nicht ändern');
+        eq(saved.battle.mods.attack, 1);
+        // Freundschaft
+        sandbox.querySelector('[data-track="friendship"][data-i="2"]').click();
+        eq((await import('../js/core/store.js')).getPokemon(pk.uuid).friendship, 3);
+        // Heilen
+        sandbox.querySelector('[data-act="heal"]').click();
+        eq((await import('../js/core/store.js')).getPokemon(pk.uuid).battle.mods.attack, 0);
+        // Mengen-Auswahl bei mehreren möglichen Levelups
+        const p2 = (await import('../js/core/store.js')).getPokemon(pk.uuid);
+        p2.exp = 10000; savePokemon(p2);
+        await (await import('../js/views/pokemon.js')).render(sandbox, pk.uuid);
+        const qty = sandbox.querySelector('#lvl-qty');
+        ok(qty && qty.options.length > 1, 'Mengen-Auswahl fehlt');
+        const lvBefore = p2.level;
+        qty.value = '2';
+        sandbox.querySelector('[data-act="levelup"]').click();
+        eq((await import('../js/core/store.js')).getPokemon(pk.uuid).level, lvBefore + 2, '2 Levelups');
+        sandbox.querySelector('[data-act="levelup-free"]').click();
+        ok(sandbox.querySelector('.level-log li'), 'Log-Eintrag fehlt');
+        await (await import('../js/views/trainer.js')).render(sandbox, t.id);
+        ok(sandbox.querySelector('.team-row'), 'Team fehlt');
+        await (await import('../js/views/home.js')).render(sandbox);
+        await (await import('../js/views/settings.js')).render(sandbox);
+        await (await import('../js/views/homebrew.js')).render(sandbox);
+      } finally {
+        deletePokemon(pk.uuid); deleteTrainer(t.id);
+      }
+    });
+
+    document.getElementById('summary').innerHTML =
+      `<b class="${failed ? 'fail' : 'ok'}">${passed} bestanden, ${failed} fehlgeschlagen</b>`;
+    document.title = failed ? 'FAIL' : 'PASS';
+  </script>
+</body>
+</html>

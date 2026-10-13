@@ -1,0 +1,12 @@
+# Download-Cache des Daten-Builds (wird bei Bedarf neu erzeugt)
+tools/.cache/
+
+# Persönliche Spielstände und das Daggerheart-PDF (urheberrechtlich geschützte Vorlage)
+# nicht öffentlich ins Repo stellen. Zeile entfernen, falls du sie doch hochladen willst.
+pokelogs/
+*.pdf
+
+# System / Editor
+.DS_Store
+Thumbs.db
+__pycache__/

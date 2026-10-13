@@ -1,0 +1,275 @@
+/* ============================================================ Farben (hell / dunkel)
+   Alle Farben laufen über diese Tokens. Dunkelmodus: automatisch nach System
+   oder per Schalter (html[data-theme="dark" | "light"]). */
+:root {
+  color-scheme: light;
+  --bg: #f4f2ee;
+  --paper: #ffffff;
+  --ink: #1f1f1f;
+  --muted: #6b6b6b;
+  --line: #d6d3cc;
+  --field: #ffffff;
+  --btn: #ecebe7;
+  --btn-hover: #e0ded8;
+  --topbar: #3a3a3a;
+  --badge-bg: #ecebe7;
+  --custom-bg: #ffe6a6;
+  --warn: #9a5b00;
+  --danger: #b3261e;
+  --up: #1b7f3b;
+  --log-bg: #f7f6f3;
+  --flash: #fff1b8;
+  /* Daggerheart-Bogen */
+  --dh-head: #d9d9d9;
+  --dh-dark: #2b2b2b;      /* Titelblock, Banner, Schild-Labels */
+  --dh-dark-ink: #ffffff;
+  --dh-border: #555555;
+  --dh-soft: #cccccc;
+  --dh-rule: #bbbbbb;
+  --box-on: #2b2b2b;
+  --hope-on: #f2b705;
+  --accent: #e3350d;
+  --radius: 10px;
+  --t-normal: #A8A878; --t-fire: #F08030; --t-water: #6890F0; --t-electric: #F8D030;
+  --t-grass: #78C850; --t-ice: #98D8D8; --t-fighting: #C03028; --t-poison: #A040A0;
+  --t-ground: #E0C068; --t-flying: #A890F0; --t-psychic: #F85888; --t-bug: #A8B820;
+  --t-rock: #B8A038; --t-ghost: #705898; --t-dragon: #7038F8; --t-dark: #705848;
+  --t-steel: #B8B8D0; --t-fairy: #EE99AC;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #141518; --paper: #1f2024; --ink: #e9e7e3; --muted: #a3a19c; --line: #3a3b40;
+    --field: #26272c; --btn: #2f3036; --btn-hover: #3a3b42; --topbar: #0d0e10;
+    --badge-bg: #34353b; --custom-bg: #5a4a1a; --warn: #f0b25a; --danger: #ff8a80; --up: #6fd08c;
+    --log-bg: #26272c; --flash: #4a4220;
+    --dh-head: #2a2b30; --dh-dark: #0d0e10; --dh-dark-ink: #f1efea; --dh-border: #8f8d88;
+    --dh-soft: #44454b; --dh-rule: #4a4b51; --box-on: #e4e2dd; --hope-on: #f2b705;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #141518; --paper: #1f2024; --ink: #e9e7e3; --muted: #a3a19c; --line: #3a3b40;
+  --field: #26272c; --btn: #2f3036; --btn-hover: #3a3b42; --topbar: #0d0e10;
+  --badge-bg: #34353b; --custom-bg: #5a4a1a; --warn: #f0b25a; --danger: #ff8a80; --up: #6fd08c;
+  --log-bg: #26272c; --flash: #4a4220;
+  --dh-head: #2a2b30; --dh-dark: #0d0e10; --dh-dark-ink: #f1efea; --dh-border: #8f8d88;
+  --dh-soft: #44454b; --dh-rule: #4a4b51; --box-on: #e4e2dd; --hope-on: #f2b705;
+}
+
+/* ============================================================ Grundlagen */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+h2, h3 { margin: 0 0 10px; }
+h3 { font-size: 1.05rem; }
+a { color: inherit; }
+input, select, textarea, button, .button {
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: var(--field);
+  color: inherit;
+  max-width: 100%;
+}
+textarea { width: 100%; resize: vertical; }
+input[type="number"] { width: 5.5em; }
+input[type="checkbox"] { width: auto; accent-color: var(--accent); }
+button, .button { cursor: pointer; background: var(--btn); text-decoration: none; display: inline-block; }
+button:hover:not(:disabled), .button:hover { background: var(--btn-hover); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+select:disabled { opacity: .7; cursor: not-allowed; }
+button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+button.danger { color: var(--danger); }
+button.mini { padding: 0 6px; font-size: .85em; }
+label { display: inline-flex; align-items: center; gap: 6px; }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 10px 16px; background: var(--topbar); color: #fff;
+}
+.topbar a { color: #fff; text-decoration: none; margin-left: 14px; }
+.topbar .brand { font-weight: 700; margin: 0; }
+.theme-btn { margin-left: 14px; background: transparent; color: #fff; border-color: #777; padding: 2px 10px; }
+.theme-btn:hover:not(:disabled) { background: #555; }
+
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px; }
+.row { display: flex; gap: 10px; align-items: center; margin: 6px 0; }
+.wrap { flex-wrap: wrap; }
+.between { justify-content: space-between; }
+.grow { flex: 1; min-width: 0; }
+.muted { color: var(--muted); }
+.small { font-size: .85em; }
+.center { text-align: center; }
+.warn { color: var(--warn); font-size: .9em; }
+.error { border-color: var(--danger); }
+.log-box { background: var(--log-bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; white-space: pre-wrap; max-height: 260px; overflow: auto; }
+
+.type { display: inline-block; padding: 1px 8px; margin: 1px 3px 1px 0; border-radius: 999px; background: var(--c); color: #fff; font-size: .8em; font-weight: 600; text-shadow: 0 1px 1px rgb(0 0 0 / .35); }
+.badge { display: inline-block; padding: 0 6px; border-radius: 4px; background: var(--badge-bg); font-size: .8em; }
+.badge.custom { background: var(--custom-bg); }
+.sprite { image-rendering: pixelated; object-fit: contain; }
+.chip { padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: .9em; }
+
+/* ============================================================ Übersicht */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.tile { display: flex; flex-direction: column; gap: 2px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; text-decoration: none; background: var(--paper); }
+.tile:hover { border-color: var(--dh-border); }
+.pk-tile { flex-direction: row; align-items: center; gap: 8px; }
+.pk-tile > span { display: flex; flex-direction: column; min-width: 0; }
+.team-strip { display: flex; flex-wrap: wrap; }
+
+/* ============================================================ Einstellungen / Homebrew */
+.table { border-collapse: collapse; margin: 6px 0; }
+.table td, .table th { padding: 4px 8px; text-align: left; }
+.hb-list { padding-left: 1em; }
+.hb-list li { margin: 4px 0; }
+.hb-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.hb-form textarea, .hb-form > input:not([type="hidden"]) { flex: 1 1 260px; }
+
+/* ============================================================ Daggerheart-Bogen (Trainer & Pokémon) */
+.dh-sheet { background: var(--paper); border: 1px solid var(--line); padding: 0 0 16px; font-family: "Segoe UI", system-ui, sans-serif; }
+.dh-sheet input, .dh-sheet textarea, .dh-sheet select { border-color: var(--dh-rule); }
+
+.dh-head { display: flex; align-items: stretch; gap: 12px; background: var(--dh-head); flex-wrap: wrap; }
+.dh-title { background: var(--dh-dark); color: var(--dh-dark-ink); padding: 10px 40px 10px 18px; display: flex; flex-direction: column; justify-content: center; clip-path: polygon(0 0, 100% 0, 92% 100%, 0 100%); }
+.dh-title b { font-size: 1.3rem; letter-spacing: .02em; }
+.dh-title span { letter-spacing: .12em; font-size: .9rem; }
+.dh-fields { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap: 6px 10px; padding: 8px 0; }
+.dh-fields label { background: var(--field); border-radius: 6px; padding: 2px 8px; border: 1px solid var(--dh-border); min-height: 36px; }
+.dh-fields small { font-size: .65rem; font-weight: 700; flex: none; }
+.dh-fields input, .dh-fields select { border: none; flex: 1; font-size: 1.05rem; padding: 2px; min-width: 0; background: transparent; }
+.dh-fields .field-text { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+
+.shield { flex-direction: column; justify-content: center; width: 86px; min-height: 92px; margin: 6px 12px 6px 0; border: 2px solid var(--dh-border); border-radius: 10px 10px 42px 42px; background: var(--field); gap: 0; }
+.shield input { width: 64px; border: none; text-align: center; font-size: 1.6rem; font-weight: 700; background: transparent; }
+.shield small { background: var(--dh-dark); color: var(--dh-dark-ink); font-weight: 700; font-size: .7rem; padding: 1px 8px; border-radius: 4px; margin-bottom: -10px; }
+
+.dh-traits { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; padding: 12px 16px; border-bottom: 1px solid var(--dh-soft); }
+.dh-traits .shield { margin: 0; }
+.balls { display: grid; grid-template-columns: repeat(3, 22px); gap: 4px; align-self: center; margin-right: 8px; }
+.ball, .badge-dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--ink); padding: 0; background: linear-gradient(var(--field) 45%, var(--ink) 45% 55%, var(--field) 55%); }
+.ball.on { background: linear-gradient(#e3350d 45%, var(--ink) 45% 55%, var(--field) 55%); }
+.trait { display: flex; flex-direction: column; align-items: center; min-width: 108px; text-align: center; gap: 0; }
+.trait .banner { background: var(--dh-dark); color: var(--dh-dark-ink); font-weight: 700; font-size: .75rem; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; display: flex; gap: 4px; align-items: center; white-space: nowrap; }
+/* Große Zahlenfelder ohne Pfeile, damit 3–4 Stellen sichtbar bleiben */
+.trait-val, .shield input, .hp-line input { appearance: textfield; -moz-appearance: textfield; }
+.trait-val::-webkit-inner-spin-button, .shield input::-webkit-inner-spin-button, .hp-line input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.trait-val { width: 76px !important; height: 56px; text-align: center; font-size: 1.5rem; font-weight: 700; border: 2px solid var(--dh-border) !important; border-radius: 6px 6px 26px 26px; margin: 4px 0; }
+.trait small { color: var(--muted); font-size: .75rem; line-height: 1.25; }
+
+.dh-cols { display: grid; grid-template-columns: 1fr 1.15fr; gap: 16px; padding: 12px 16px; }
+.dh-sec { margin-bottom: 16px; }
+.dh-wide { padding: 0 16px; }
+.dh-banner { text-align: center; font-size: 1rem; letter-spacing: .04em; border: 2px solid var(--dh-border); border-radius: 4px; margin: 0 24px 8px; padding: 3px; background: var(--paper); box-shadow: 0 0 0 4px var(--paper), 0 0 0 6px var(--dh-soft); text-transform: uppercase; }
+
+.thresholds { display: flex; align-items: center; gap: 4px; justify-content: center; flex-wrap: wrap; }
+.th { background: var(--dh-dark); color: var(--dh-dark-ink); text-align: center; padding: 4px 8px; border-radius: 4px; font-size: .78rem; display: flex; flex-direction: column; }
+.th small { font-size: .7rem; opacity: .8; font-weight: 400; }
+.th-val { flex-direction: column; gap: 0; }
+.th-val input { width: 3.5em; text-align: center; font-size: .8em; }
+.th-val output { font-weight: 700; font-size: 1.2rem; }
+
+.track { display: flex; align-items: center; gap: 5px; margin: 10px 0; flex-wrap: wrap; }
+.track b { width: 64px; font-size: .9rem; color: var(--muted); }
+.track input, .track .track-end { margin-left: auto; }
+.track input { width: 3.5em; font-size: .8em; }
+.box { width: 22px; height: 18px; padding: 0; border: 2px solid var(--dh-border); border-radius: 4px; background: var(--field); }
+.box.on { background: var(--box-on); }
+.hope { display: flex; justify-content: center; gap: 14px; background: var(--dh-soft); border-radius: 999px; padding: 8px; margin: 6px 20px; }
+.diamond { width: 20px; height: 20px; padding: 0; transform: rotate(45deg); border: 2px solid var(--dh-border); background: var(--field); border-radius: 3px; }
+.diamond.on { background: var(--hope-on); }
+
+.line { display: flex; flex-direction: column-reverse; align-items: stretch; margin-top: 8px; }
+.line small { font-weight: 700; font-size: .7rem; }
+.line input { border: none; border-bottom: 1px solid var(--dh-rule); border-radius: 0; }
+.exp-row { display: flex; gap: 6px; margin: 4px 0; }
+.exp-row input:first-child { flex: 1; border: none; border-bottom: 1px solid var(--dh-rule); border-radius: 0; }
+.exp-row .bonus { width: 3.2em; text-align: center; }
+.badges { display: flex; gap: 6px; align-items: center; justify-content: center; margin-bottom: 8px; }
+.badges b { font-size: .8rem; color: var(--muted); }
+.badge-dot { background: var(--field); }
+.badge-dot.on { background: var(--hope-on); }
+.team-head { display: flex; justify-content: flex-end; font-weight: 700; font-size: .7rem; padding-right: 26px; }
+.team-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--dh-soft); }
+.team-row a { text-decoration: none; display: flex; flex-wrap: wrap; gap: 0 8px; align-items: center; }
+.team-row.inactive { opacity: .55; }
+.lined { border: none !important; background: repeating-linear-gradient(transparent 0 27px, var(--dh-rule) 27px 28px); line-height: 28px; padding: 0 4px; }
+.sheet-actions { padding: 0 16px; }
+/* Aktionsleiste über dem Bogen, bleibt beim Scrollen sichtbar */
+.sheet-toolbar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 16px; background: var(--paper); border-bottom: 1px solid var(--dh-soft); }
+
+/* ============================================================ Pokémon-Bogen (Ergänzungen) */
+.pk-sprite { display: flex; align-items: center; }
+.pk-sprite .sprite { background: radial-gradient(circle, color-mix(in srgb, var(--accent) 35%, transparent), transparent 70%); border-radius: 50%; }
+.pokemon-sheet .dh-title { border-left: 8px solid var(--accent); }
+.dh-subhead { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--dh-soft); }
+.unlock { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: .9em; cursor: pointer; margin-left: auto; }
+.unlock.on { background: var(--custom-bg); border-color: #e0b400; }
+
+.hp-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hp-line input { width: 5em; font-size: 1.3rem; font-weight: 700; text-align: center; }
+.hp-bar { height: 10px; border: 1px solid var(--dh-border); border-radius: 5px; overflow: hidden; margin: 8px 0; background: var(--field); }
+.hp-bar span { display: block; height: 100%; background: #3fae55; }
+.hp-bar.mid span { background: #e0b400; }
+.hp-bar.low span { background: #d23b2b; }
+.heal-btn { margin-left: auto; font-weight: 600; }
+
+.bt-row { display: grid; grid-template-columns: 8.6em 4.2em 3.8em auto auto auto 1fr; gap: 6px; align-items: center; padding: 3px 0; border-bottom: 1px dashed var(--dh-soft); }
+.bt-head { border: none; padding: 0; font-size: .75em; color: var(--muted); text-align: center; }
+.bt-base { text-align: center; color: var(--muted); font-weight: 600; }
+.bt-row b { font-size: .9rem; }
+.bt-val { font-size: 1.25rem; font-weight: 700; text-align: center; }
+.bt-val.up { color: var(--up); }
+.bt-val.down { color: var(--danger); }
+.bt-row button { padding: 0 9px; font-weight: 700; }
+.bt-row input { width: 4.2em; text-align: center; font-weight: 700; font-size: 1.1rem; }
+.bt-note { font-size: .8em; color: var(--muted); }
+
+.move-row, .ability-row { padding: 8px 0; border-bottom: 1px dashed var(--dh-soft); }
+.move-row > input, .ability-row > input { width: min(320px, 100%); font-weight: 600; }
+.move-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin-top: 4px; font-size: .9em; }
+.move-text { margin: 4px 0 0; font-size: .92em; }
+.fx { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.fx-chip { font-size: .8em; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--accent); }
+.dc-why summary { cursor: pointer; color: var(--muted); }
+.dc-why ul { margin: 4px 0; font-size: .9em; }
+.matchups { display: grid; gap: 6px; }
+.mu { display: flex; gap: 10px; align-items: baseline; }
+.mu b { width: 4em; flex: none; }
+.level-log { padding-left: 1.4em; margin: 0; }
+.level-log > li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.level-log ul { margin: 4px 0; padding-left: 1em; list-style: none; }
+.level-log s { color: var(--danger); }
+.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { from { background: var(--flash); } to { background: transparent; } }
+
+@media (max-width: 760px) {
+  .dh-cols { grid-template-columns: 1fr; }
+  .dh-fields { grid-template-columns: 1fr; }
+  .dh-title { clip-path: none; width: 100%; }
+  .bt-row { grid-template-columns: 7.2em 3.6em 3.4em auto auto auto; }
+  .bt-note { grid-column: 1 / -1; }
+}
+
+/* ============================================================ Druck (immer hell) */
+@media print {
+  :root, :root[data-theme] {
+    color-scheme: light;
+    --bg: #fff; --paper: #fff; --ink: #000; --muted: #555; --line: #999; --field: #fff;
+    --dh-head: #d9d9d9; --dh-dark: #2b2b2b; --dh-dark-ink: #fff; --dh-border: #555;
+    --dh-soft: #ccc; --dh-rule: #bbb; --box-on: #2b2b2b; --badge-bg: #eee; --log-bg: #fff;
+  }
+  body { font-size: 12px; }
+  main { max-width: none; padding: 0; }
+  .no-print, .topbar { display: none !important; }
+  .card, .dh-sec { break-inside: avoid; }
+  input, select, textarea { border-color: transparent !important; appearance: none; }
+}

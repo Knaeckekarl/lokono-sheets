@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <!-- Farbschema sofort setzen, damit nichts kurz hell aufblitzt -->
+  <script>try { const t = localStorage.getItem('lokono-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+  <title>Lokono Sheets</title>
+  <meta name="description" content="Pokémon- und Trainerbögen für die Lokono-Kampagne">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%23fff' stroke='%23222' stroke-width='8'/><path d='M4 50h92' stroke='%23222' stroke-width='8'/><path d='M4 50a46 46 0 0 1 92 0z' fill='%23e3350d'/><circle cx='50' cy='50' r='13' fill='%23fff' stroke='%23222' stroke-width='8'/></svg>">
+  <link rel="preconnect" href="https://raw.githubusercontent.com">
+  <link rel="stylesheet" href="css/style.css">
+  <!-- Kern-Module parallel vorladen statt nacheinander zu entdecken -->
+  <link rel="modulepreload" href="js/core/store.js">
+  <link rel="modulepreload" href="js/core/rules.js">
+  <link rel="modulepreload" href="js/core/model.js">
+  <link rel="modulepreload" href="js/core/data.js">
+  <link rel="modulepreload" href="js/views/shared.js">
+  <link rel="preload" href="data/pokedex.json" as="fetch" crossorigin>
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <header class="topbar no-print">
+    <a href="#/" class="brand">◓ Lokono Sheets</a>
+    <nav>
+      <a href="#/">Übersicht</a>
+      <a href="#/settings">Regeln &amp; Würfel</a>
+      <a href="#/homebrew">Homebrew</a>
+      <button id="theme-toggle" class="theme-btn" title="Farbschema wechseln">◐ Auto</button>
+    </nav>
+  </header>
+  <main id="app" aria-live="polite"><p class="muted">Lade …</p></main>
+</body>
+</html>
