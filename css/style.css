@@ -273,3 +273,12 @@ label { display: inline-flex; align-items: center; gap: 6px; }
   .card, .dh-sec { break-inside: avoid; }
   input, select, textarea { border-color: transparent !important; appearance: none; }
 }
+
+/* Entwickeln-Dialog */
+.evo-dlg { max-width: min(640px, calc(100vw - 32px)); border: 2px solid var(--dh-border); border-radius: var(--radius); background: var(--paper); color: var(--ink); padding: 16px 18px; }
+.evo-dlg::backdrop { background: rgb(0 0 0 / .5); }
+.evo-targets { display: grid; gap: 6px; margin: 8px 0 12px; max-height: 45vh; overflow: auto; }
+.evo-opt { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.evo-opt.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.evo-choice { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.log-evo > div { color: var(--accent); }

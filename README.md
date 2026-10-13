@@ -27,6 +27,11 @@ Es ist eine reine statische Webseite (HTML/CSS/JavaScript ohne Build-Schritt) un
   - **Levelup-Protokoll** mit jedem einzelnen Würfel; neu gewürfelte 1en sind durchgestrichen sichtbar
   - bei mehreren möglichen Levelups: **Anzahl auswählbar**
   - letztes Levelup exakt rückgängig machbar; „+1 Level ohne EXP“ für Spielleiter-Level
+- **✨ Entwickeln:** Ein Dialog zeigt alle möglichen Entwicklungen mit der Bedingung aus dem Spiel
+  (z.B. „Lv 30“, „Wasserstein“, „Tausch, trägt King-Stein“; Regionalformen → passende Regionalform).
+  Im Dialog wählst du, ob die Fähigkeiten durch die passenden der neuen Art ersetzt werden und ob Custom-Typen bleiben.
+  Level, EXP, Werte, Attacken, Spitzname und Freundschaft bleiben. Bonus: jeder Statuswert bekommt ⌈Level/10⌉ Würfe
+  der neuen Würfelklasse (KP ×3, 1en neu gewürfelt). Alles steht im Protokoll und ist rückgängig machbar
 - Accuracy & Evasion statt GENA & PA. Wunden, Fertigkeiten und Bewegung entfallen
 
 **Trainer-Bogen** im Daggerheart-Stil (wie das PDF)
@@ -91,7 +96,7 @@ dann bleiben alte Speicherstände automatisch ladbar.
 4. Fähigkeiten aus alten Bögen, die nicht zur Art passen (z.B. Haipirinha mit Wassertempo), bleiben erhalten und sind mit „nicht arttypisch“ markiert.
 
 **Ideen für später**
-- „Entwickeln“-Knopf (Art wechseln, Werte behalten, Würfelklasse neu)
+- Entwicklungen für Homebrew-Pokémon im Homebrew-Editor festlegen
 - Fähigkeiten-Effekte in der Schwächenübersicht (Schwebe, Sumpfschale …)
 - Team-Reihenfolge per Drag & Drop, Trainerbild
 - Offline-Nutzung (Service Worker), Dunkelmodus

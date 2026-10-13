@@ -198,15 +198,78 @@ export function levelUp(pk, info, settings, { free = false } = {}) {
   return entry;
 }
 
-/** Macht das letzte Levelup exakt rückgängig. */
+/** Macht den letzten Protokolleintrag (Levelup oder Entwicklung) exakt rückgängig. */
 export function undoLevelUp(pk) {
   const entry = pk.levelLog.pop();
   if (!entry) return null;
-  Object.assign(pk, {
-    level: entry.snapshot.level,
-    exp: entry.snapshot.exp,
-    stats: { ...entry.snapshot.stats },
-    currentHp: entry.snapshot.currentHp,
+  Object.assign(pk, structuredClone(entry.snapshot));
+  return entry;
+}
+
+// ---------------------------------------------------------------- Entwicklung
+
+/** Anzahl Bonuswürfe pro Statuswert: Lv 1–10 → 1, 11–20 → 2, … (wie auf der alten Seite) */
+export const evolutionRollCount = (level) => Math.max(1, Math.ceil(level / 10));
+
+/**
+ * Ordnet Fähigkeiten der neuen Art zu: gleiche Position → gleiche Position,
+ * versteckte → versteckte. Artfremde/eigene Fähigkeiten bleiben unverändert.
+ */
+export function mapAbilities(current, fromInfo, toInfo) {
+  const normalsFrom = fromInfo.abilities.filter((a) => a !== fromInfo.hiddenAbility);
+  const normalsTo = toInfo.abilities.filter((a) => a !== toInfo.hiddenAbility);
+  const mapped = current.map((a) => {
+    if (a && a === fromInfo.hiddenAbility && toInfo.hiddenAbility) return toInfo.hiddenAbility;
+    const i = normalsFrom.indexOf(a);
+    return i >= 0 ? normalsTo[i] ?? normalsTo[0] ?? a : a;
   });
+  return [...new Set(mapped)];
+}
+
+/**
+ * Entwickelt ein Pokémon. Level, EXP, Statuswerte, Attacken, Spitzname und Freundschaft bleiben.
+ * Bonus: jeder Statuswert bekommt evolutionRollCount(level) Würfe der NEUEN Würfelklasse (KP ×3).
+ * @param {{abilities: 'replace'|'keep', types: 'new'|'keep'}} choice  Auswahl im Entwicklungs-Dialog
+ */
+export function evolve(pk, fromInfo, toInfo, settings, { abilities = 'replace', types = 'new' } = {}) {
+  const snapshot = structuredClone({
+    speciesId: pk.speciesId, types: pk.types, formName: pk.formName,
+    abilities: pk.abilities, stats: pk.stats, currentHp: pk.currentHp,
+  });
+  const dice = pk.levelUp.diceOverride || diceClassFor(toInfo, settings).dice;
+  const count = evolutionRollCount(pk.level);
+
+  const rolls = STATS.map((stat) => {
+    const dieRolls = Array.from({ length: count }, () => roll(dice, { rerollOnes: settings.rerollOnes }));
+    const total = dieRolls.reduce((sum, r) => sum + r.total, 0);
+    const mult = multiplierFor(stat, settings);
+    const before = pk.stats[stat];
+    pk.stats[stat] = before + total * mult;
+    return { kind: 'Entwicklung', stat, rolls: dieRolls, total, mult, gain: total * mult, before, after: pk.stats[stat] };
+  });
+  pk.currentHp += pk.stats.hp - snapshot.stats.hp; // KP-Zuwachs kommt auch den aktuellen KP zugute
+
+  pk.speciesId = toInfo.id;
+  if (types === 'new') {
+    pk.types = [...toInfo.types];
+    pk.formName = '';
+  }
+  if (abilities === 'replace') pk.abilities = mapAbilities(pk.abilities, fromInfo, toInfo);
+
+  const entry = {
+    type: 'evolution',
+    at: new Date().toISOString(),
+    from: pk.level,
+    to: pk.level,
+    fromSpecies: fromInfo.de,
+    toSpecies: toInfo.de,
+    dice,
+    count,
+    rerollOnes: settings.rerollOnes,
+    choice: { abilities, types },
+    rolls,
+    snapshot,
+  };
+  pk.levelLog.push(entry);
   return entry;
 }

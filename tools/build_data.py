@@ -182,12 +182,80 @@ def walk_chain(chain):
             "firstLevel": levels[0] if len(levels) > 0 else 0,
             "secondLevel": levels[1] if len(levels) > 1 else 0,
             "parent": parent,
+            # Nachfolger samt Original-Bedingungen (für den "Entwickeln"-Dialog)
+            "children": [(c["species"]["name"], c.get("evolution_details") or []) for c in node["evolves_to"]],
         }
         for child in node["evolves_to"]:
             visit(child, stage + 1, levels, node["species"]["name"])
 
     visit(chain, 0, [], None)
     return info
+
+
+TYPE_DE = {
+    "normal": "Normal", "fire": "Feuer", "water": "Wasser", "electric": "Elektro", "grass": "Pflanze",
+    "ice": "Eis", "fighting": "Kampf", "poison": "Gift", "ground": "Boden", "flying": "Flug",
+    "psychic": "Psycho", "bug": "Käfer", "rock": "Gestein", "ghost": "Geist", "dragon": "Drache",
+    "dark": "Unlicht", "steel": "Stahl", "fairy": "Fee",
+}
+TRIGGER_DE = {
+    "shed": "freier Platz im Team", "spin": "Drehen", "tower-of-darkness": "Turm des Unlichts",
+    "tower-of-waters": "Turm des Wassers", "three-critical-hits": "3 Volltreffer in einem Kampf",
+    "take-damage": "Schaden erlitten", "agile-style-move": "Tempo-Stil-Attacke",
+    "strong-style-move": "Kraft-Stil-Attacke", "recoil-damage": "Rückstoßschaden erlitten",
+    "use-move": "Attacke einsetzen", "three-defeated-bisharp": "3 Gladimperio besiegt",
+    "gimmighoul-coins": "999 Gierspenst-Münzen", "other": "besondere Bedingung",
+}
+
+
+def evo_condition(details, items_de, moves_de, species_de):
+    """Deutsche Kurzbeschreibung der Entwicklungsbedingung(en), z.B. "Lv 30" oder "Wasserstein"."""
+    variants = []
+    for d in details:
+        trig = (d.get("trigger") or {}).get("name")
+        parts = []
+        if trig == "level-up":
+            parts.append(f"Lv {d['min_level']}" if d.get("min_level") else "Levelaufstieg")
+        elif trig == "use-item":
+            parts.append(items_de.get(d["item"]["name"], d["item"]["name"]) if d.get("item") else "Item")
+        elif trig == "trade":
+            parts.append("Tausch")
+        elif trig:
+            parts.append(TRIGGER_DE.get(trig, trig))
+        if d.get("held_item"):
+            parts.append(f"trägt {items_de.get(d['held_item']['name'], d['held_item']['name'])}")
+        if d.get("trade_species"):
+            parts.append(f"gegen {species_de(d['trade_species']['name'])}")
+        if d.get("min_happiness"):
+            parts.append("hohe Freundschaft")
+        if d.get("min_affection"):
+            parts.append("hohe Zuneigung")
+        if d.get("min_beauty"):
+            parts.append("hohe Schönheit")
+        if d.get("time_of_day"):
+            parts.append({"day": "tagsüber", "night": "nachts", "dusk": "abends"}.get(d["time_of_day"], d["time_of_day"]))
+        if d.get("known_move"):
+            parts.append(f"kennt {moves_de.get(d['known_move']['name'], d['known_move']['name'])}")
+        if d.get("known_move_type"):
+            parts.append(f"kennt {TYPE_DE.get(d['known_move_type']['name'], '')}-Attacke")
+        if d.get("location"):
+            parts.append("an besonderem Ort")
+        if d.get("gender"):
+            parts.append("♀" if d["gender"] == 1 else "♂")
+        if d.get("needs_overworld_rain"):
+            parts.append("bei Regen")
+        if d.get("turn_upside_down"):
+            parts.append("Konsole umdrehen")
+        if d.get("relative_physical_stats") is not None:
+            parts.append({1: "Ang > Vert", -1: "Ang < Vert", 0: "Ang = Vert"}[d["relative_physical_stats"]])
+        if d.get("party_species"):
+            parts.append(f"mit {species_de(d['party_species']['name'])} im Team")
+        if d.get("party_type"):
+            parts.append(f"mit {TYPE_DE.get(d['party_type']['name'], '')}-Pokémon im Team")
+        text = ", ".join(parts)
+        if text and text not in variants:
+            variants.append(text)
+    return " oder ".join(variants) or "besondere Bedingung"
 
 
 # ---------------------------------------------------------------- Main
@@ -249,6 +317,19 @@ def main():
         }
 
     print("6/6 Dateien schreiben ...")
+
+    # Deutsche Item-Namen nur für Items, die in Entwicklungsbedingungen vorkommen
+    evo_items = set()
+    for e in evo.values():
+        for _, details in e["children"]:
+            for d in details:
+                for key in ("item", "held_item"):
+                    if d.get(key):
+                        evo_items.add(d[key]["name"])
+    items_raw = get_many([f"{API}/item/{name}" for name in sorted(evo_items)], "Entwicklungs-Items")
+    items_de = {i["name"]: name_in(i["names"]) or i["name"] for i in items_raw.values()}
+    moves_de = {k: v["n"] for k, v in moves.items()}
+    species_de = lambda name: name_in(species_by_name[name]["names"]) if name in species_by_name else name
 
     def base_stats(p):
         return {STAT_KEYS[s["stat"]["name"]]: s["base_stat"] for s in p["stats"]}
@@ -314,6 +395,22 @@ def main():
         game_abilities = [a["ability"]["name"] for a in sorted(p["abilities"], key=lambda a: a["slot"])]
         hidden = next((a["ability"]["name"] for a in p["abilities"] if a["is_hidden"]), None)
 
+        # Mögliche Entwicklungen. Regionalformen entwickeln sich in die passende Regionalform.
+        suffix = "" if p["is_default"] else p["name"].replace(sp["name"], "").strip("-")
+        next_evos = []
+        if not any(x in suffix for x in ("mega", "gmax", "totem")):
+            for child, details in e.get("children", []):
+                child_sp = species_by_name.get(child)
+                if not child_sp:
+                    continue
+                target = default_pokemon_of_species.get(child)
+                regional = f"{child}-{suffix}" if suffix else None
+                for v in child_sp.get("varieties", []):
+                    if regional and v["pokemon"]["name"] == regional:
+                        target = pokemon.get(v["pokemon"]["url"]) or target
+                if target:
+                    next_evos.append({"id": target["id"], "cond": evo_condition(details, items_de, moves_de, species_de)})
+
         entry = {
             "id": p["id"],
             "speciesId": sp["id"],
@@ -327,7 +424,7 @@ def main():
             "legendary": sp["is_legendary"],
             "mythical": sp["is_mythical"],
             "genderRate": sp["gender_rate"],
-            "evo": {**evo_info(sp["name"]), "pre": pre},
+            "evo": {**evo_info(sp["name"]), "pre": pre, "next": next_evos},
             "abilities": game_abilities,
             "hiddenAbility": hidden,
             "learn": {"level": level_moves, "other": sorted(other)},

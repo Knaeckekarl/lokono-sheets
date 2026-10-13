@@ -19,6 +19,7 @@
     import { rollDie, roll, formatRoll, parseDice } from '../js/core/dice.js';
     import {
       DEFAULT_SETTINGS, diceClassFor, levelUp, undoLevelUp, expForNextLevel, possibleLevelUps, battleValue, heal,
+      evolve, evolutionRollCount, mapAbilities,
     } from '../js/core/rules.js';
     import { getSpecies, getMoves } from '../js/core/data.js';
     import { describeMoveEffects } from '../js/core/effects.js';
@@ -109,6 +110,35 @@
       eq(pk.battle.mods.attack, 0); eq(pk.stats, statsBefore, 'Statuswerte unverändert');
     });
 
+    // ---------------- Entwicklung
+    await test('Entwicklungsdaten: Nachfolger mit Bedingung', async () => {
+      const next = (await getSpecies(318)).evo.next;
+      eq(next, [{ id: 319, cond: 'Lv 30' }]);
+      eq((await getSpecies(133)).evo.next.length, 8, 'Evoli');
+      eq((await getSpecies(10103)).evo.next[0].id, (await getSpecies(10104)).id, 'Alola-Vulpix → Alola-Vulnona');
+    });
+    await test('Fähigkeiten-Zuordnung bei Entwicklung', async () => {
+      const [a, b] = [await getSpecies(318), await getSpecies(319)];
+      // Rauhaut → Rauhaut, Temposchub (versteckt) → Temposchub, artfremdes Wassertempo bleibt
+      eq(mapAbilities(['rough-skin', 'swift-swim', 'speed-boost'], a, b), ['rough-skin', 'swift-swim', 'speed-boost']);
+      const [c, d] = [await getSpecies(4), await getSpecies(5)]; // Glumanda → Glutexo
+      eq(mapAbilities(['blaze', 'solar-power'], c, d), ['blaze', 'solar-power']);
+    });
+    await test('Entwickeln: Bonus, Log, Rückgängig', async () => {
+      const [from, to] = [await getSpecies(318), await getSpecies(319)];
+      const pk = createPokemon(from, DEFAULT_SETTINGS, { level: 23 });
+      pk.types = ['fire']; // Custom-Typ
+      const before = structuredClone(pk);
+      const e = evolve(pk, from, to, DEFAULT_SETTINGS, { abilities: 'replace', types: 'keep' });
+      eq(pk.speciesId, 319); eq(pk.types, ['fire'], 'Custom-Typ behalten'); eq(pk.level, 23);
+      eq(e.count, evolutionRollCount(23)); eq(e.count, 3);
+      ok(e.rolls.every((r) => r.rolls.length === 3 && r.after === r.before + r.gain), 'Würfe/Summen');
+      eq(e.rolls.find((r) => r.stat === 'hp').mult, 3, 'KP ×3');
+      ok(e.rolls.every((r) => r.rolls.every((x) => x.dice.every((d) => d.value >= 2))), '1 im Ergebnis');
+      undoLevelUp(pk);
+      eq(pk.speciesId, 318); eq(pk.stats, before.stats); eq(pk.types, ['fire']); eq(pk.levelLog, []);
+    });
+
     // ---------------- Sperre für untypische Änderungen
     await test('Arttypisch: Lernset & Geschlechter', async () => {
       const info = await getSpecies(318);
@@ -174,6 +204,17 @@
         eq((await import('../js/core/store.js')).getPokemon(pk.uuid).level, lvBefore + 2, '2 Levelups');
         sandbox.querySelector('[data-act="levelup-free"]').click();
         ok(sandbox.querySelector('.level-log li'), 'Log-Eintrag fehlt');
+        // Entwickeln über den Dialog (Kaumalat → Knarksel)
+        sandbox.querySelector('[data-act="evolve"]').click();
+        await new Promise((r) => setTimeout(r, 300));
+        const dlg = sandbox.querySelector('#evo-dlg');
+        ok(dlg.open, 'Dialog nicht geöffnet');
+        ok(dlg.querySelector('select[name="abilities"]'), 'Fähigkeiten-Auswahl fehlt');
+        dlg.querySelector('button[value="ok"]').click(); // wie ein echter Klick auf „Entwickeln“
+        await new Promise((r) => setTimeout(r, 300));
+        const evolved = (await import('../js/core/store.js')).getPokemon(pk.uuid);
+        eq(evolved.speciesId, 444, 'zu Knarksel entwickelt');
+        ok(sandbox.querySelector('.log-evo'), 'Entwicklung fehlt im Protokoll');
         await (await import('../js/views/trainer.js')).render(sandbox, t.id);
         ok(sandbox.querySelector('.team-row'), 'Team fehlt');
         await (await import('../js/views/home.js')).render(sandbox);

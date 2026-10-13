@@ -11,6 +11,7 @@ import {
 import {
   diceClassFor, effectiveDice, expForNextLevel, possibleLevelUps, levelUp, undoLevelUp,
   calcAccuracy, calcEvasion, BATTLE_STATS, battleValue, heal,
+  evolve, evolutionRollCount, mapAbilities,
 } from '../core/rules.js';
 import { describeMoveEffects } from '../core/effects.js';
 import { isCustomForm, allowedGenders, learnableMoves } from '../core/model.js';
@@ -46,7 +47,8 @@ export async function render(app, uuid) {
     <datalist id="move-dl-species">${moveOptions(moves, info, canLearn)}</datalist>
     <datalist id="ability-dl">${Object.values(abilities).map((a) => `<option value="${esc(a.n)}">`).join('')}</datalist>
     <datalist id="ability-dl-species">${info.abilities.map((a) => `<option value="${esc(abilities[a]?.n || a)}">`).join('')}</datalist>
-    <div id="sheet" class="sheet dh-sheet pokemon-sheet"></div>`;
+    <div id="sheet" class="sheet dh-sheet pokemon-sheet"></div>
+    <dialog id="evo-dlg" class="evo-dlg"></dialog>`;
   const sheet = root.querySelector('#sheet');
   const save = (m) => savePokemon(m);
 
@@ -169,7 +171,8 @@ export async function render(app, uuid) {
                   `<option value="${i + 1}" ${i + 1 === possible ? 'selected' : ''}>${i + 1}</option>`).join('')}</select>` : ''}
               <button data-act="levelup" class="primary" ${possible ? '' : 'disabled'}>⬆ ${possible > 1 ? 'Levelups' : 'Levelup'}</button>
               <button data-act="levelup-free" ${pk.level < 100 ? '' : 'disabled'} title="Level ohne EXP-Kosten, z.B. vom Spielleiter">+1 Level ohne EXP</button>
-              <button data-act="undo" ${pk.levelLog.length ? '' : 'disabled'}>↶ Rückgängig</button>
+              <button data-act="undo" ${pk.levelLog.length ? '' : 'disabled'} title="Letztes Levelup bzw. letzte Entwicklung rückgängig machen">↶ Rückgängig</button>
+              ${info.evo?.next?.length ? '<button data-act="evolve" title="Entwicklung auswählen">✨ Entwickeln</button>' : ''}
             </div>
             <p class="muted small">${possible ? `${possible} Levelup${possible > 1 ? 's' : ''} möglich · ` : ''}Würfel ${effectiveDice(pk, info, settings)} · ${settings.rerollOnes ? '1en werden neu gewürfelt' : '1en zählen'} · KP ×${settings.hpMultiplier} · Initiative ×${settings.speedMultiplier}</p>
           </section>
@@ -291,7 +294,19 @@ export async function render(app, uuid) {
       },
       undo() {
         const last = pk.levelLog.at(-1);
-        if (last && confirm(`Levelup Lv ${last.from} → ${last.to} rückgängig machen?`)) undoLevelUp(pk);
+        if (!last) return;
+        if (last.type === 'evolution') {
+          if (!confirm(`Entwicklung ${last.fromSpecies} → ${last.toSpecies} rückgängig machen?`)) return 'navigated';
+          undoLevelUp(pk);
+          save(pk);
+          render(app, uuid); // Art hat sich geändert → Bogen mit alten Artdaten neu laden
+          return 'navigated';
+        }
+        if (confirm(`Levelup Lv ${last.from} → ${last.to} rückgängig machen?`)) undoLevelUp(pk);
+      },
+      evolve() {
+        openEvolution();
+        return 'navigated';
       },
       heal() {
         heal(pk);
@@ -334,6 +349,83 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
     save(pk);
     draw();
     if (act.startsWith('levelup')) sheet.querySelector('.level-log li')?.classList.add('flash');
+  });
+
+  // ---------------------------------------------------------------- Entwickeln-Dialog
+  const dlg = root.querySelector('#evo-dlg');
+  let evo = null; // { targets: [{ info, cond }], index, abilities, types }
+
+  async function openEvolution() {
+    const targets = await Promise.all(info.evo.next.map(async (n) => ({ info: await getSpecies(n.id), cond: n.cond })));
+    evo = { targets, index: 0, abilities: 'replace', types: isCustomForm(pk, info) ? 'keep' : 'new' };
+    drawEvolution();
+    dlg.showModal();
+  }
+
+  function drawEvolution() {
+    const to = evo.targets[evo.index].info;
+    const custom = isCustomForm(pk, info);
+    const dice = pk.levelUp.diceOverride || diceClassFor(to, settings).dice;
+    const count = evolutionRollCount(pk.level);
+    const abName = (a) => esc(abilities[a]?.n || a);
+    const preview = (evo.abilities === 'replace' ? mapAbilities(pk.abilities, info, to) : pk.abilities).filter(Boolean);
+    dlg.innerHTML = `
+      <form method="dialog" class="evo-form">
+        <h3>✨ Entwicklung: ${esc(pk.nickname || info.de)} <span class="muted">(${esc(info.de)})</span></h3>
+        <div class="evo-targets">
+          ${evo.targets.map((t, i) => `
+            <label class="evo-opt ${i === evo.index ? 'on' : ''}">
+              <input type="radio" name="target" value="${i}" ${i === evo.index ? 'checked' : ''}>
+              ${spriteImg(t.info.id, { shiny: pk.shiny, size: 56 })}
+              <span><b>${esc(t.info.de)}</b> ${t.info.types.map(typeBadge).join('')}<br>
+                <small class="muted">Bedingung im Spiel: ${esc(t.cond)}</small></span>
+            </label>`).join('')}
+        </div>
+
+        <p><b>Bonus:</b> jeder Statuswert bekommt ${count}× ${esc(dice)}
+          <span class="muted">(⌈Lv ${pk.level} / 10⌉ Würfe, Würfelklasse der neuen Art${settings.rerollOnes ? ', 1en werden neu gewürfelt' : ''}, KP ×${settings.hpMultiplier})</span></p>
+
+        <label class="evo-choice">Fähigkeiten
+          <select name="abilities">
+            <option value="replace" ${evo.abilities === 'replace' ? 'selected' : ''}>durch passende Fähigkeiten von ${esc(to.de)} ersetzen</option>
+            <option value="keep" ${evo.abilities === 'keep' ? 'selected' : ''}>unverändert lassen</option>
+          </select>
+        </label>
+        <p class="muted small">Ergebnis: ${preview.map(abName).join(', ') || '–'}</p>
+
+        ${custom ? `
+        <label class="evo-choice">Typen
+          <select name="types">
+            <option value="keep" ${evo.types === 'keep' ? 'selected' : ''}>Custom-Typen behalten</option>
+            <option value="new" ${evo.types === 'new' ? 'selected' : ''}>Typen von ${esc(to.de)} übernehmen</option>
+          </select>
+        </label>
+        <p class="muted small">Ergebnis: ${(evo.types === 'keep' ? pk.types : to.types).map(typeBadge).join('')}</p>`
+        : `<p class="muted small">Typen: ${to.types.map(typeBadge).join('')}</p>`}
+
+        <p class="muted small">Level, EXP, Statuswerte, Attacken, Spitzname und Freundschaft bleiben erhalten. Die Entwicklung lässt sich über „↶ Rückgängig“ zurücknehmen.</p>
+        <div class="row wrap">
+          <button value="cancel">Abbrechen</button>
+          <button value="ok" class="primary">✨ Zu ${esc(to.de)} entwickeln</button>
+        </div>
+      </form>`;
+  }
+
+  dlg.addEventListener('change', (e) => {
+    const { name, value } = e.target;
+    if (name === 'target') evo.index = +value;
+    if (name === 'abilities') evo.abilities = value;
+    if (name === 'types') evo.types = value;
+    drawEvolution();
+  });
+
+  // Formular mit method="dialog": "submit" kommt direkt beim Klick (zuverlässiger als "close")
+  dlg.addEventListener('submit', (e) => {
+    if (e.submitter?.value !== 'ok' || !evo) return;
+    evolve(pk, info, evo.targets[evo.index].info, settings, { abilities: evo.abilities, types: evo.types });
+    save(pk);
+    evo = null;
+    render(app, uuid); // neue Art → Bogen mit neuen Artdaten neu aufbauen
   });
 
   draw();
@@ -434,6 +526,17 @@ function abilityRow(slug, i, abilities, info, unlocked) {
 function logEntry(e) {
   const dice = (r) => r.dice.map((d) =>
     `[${d.faces.map((f, k) => (k < d.faces.length - 1 ? `<s title="neu gewürfelt">${f}</s>` : `<b>${f}</b>`)).join('→')}]`).join(' + ');
+  if (e.type === 'evolution') {
+    const evoRolls = e.rolls.map((r) => `
+      <li><b>${STAT_LABELS[r.stat]}</b> ${r.before} → <b>${r.after}</b> <span class="muted">(+${r.gain})</span>
+        · ${e.count}× ${esc(e.dice)}: ${r.rolls.map(dice).join(' + ')} = ${r.total}${r.mult !== 1 ? ` ×${r.mult}` : ''}</li>`).join('');
+    return `
+    <li class="log-evo">
+      <div><b>✨ Entwicklung: ${esc(e.fromSpecies)} → ${esc(e.toSpecies)}</b> · Lv ${e.from} · ${e.count}× ${esc(e.dice)} je Wert
+        <span class="muted">· ${new Date(e.at).toLocaleString('de-DE')}</span></div>
+      <ul>${evoRolls}</ul>
+    </li>`;
+  }
   // z.B. "Zufall · Sp. Angriff 7 → 10 (+3) · Wurf 1W6: [~1~→3]"
   const rolls = e.rolls.map((r) => `
     <li><span class="badge">${esc(r.kind)}</span> <b>${STAT_LABELS[r.stat]}</b> ${r.before} → <b>${r.after}</b>
