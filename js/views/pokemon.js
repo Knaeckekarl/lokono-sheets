@@ -2,7 +2,7 @@
 
 import { esc, downloadJson, safeName, today, uid, rerenderKeepingFocus } from '../core/util.js';
 import {
-  STATS, STAT_LABELS, MOVE_CATEGORIES, STATUS_EFFECTS, GENDERS, defensiveMatchups,
+  STATS, STAT_LABELS, MOVE_CATEGORIES, STATUS_EFFECTS, GENDERS, MAX_TYPES, MAX_ABILITIES, defensiveMatchups,
 } from '../core/constants.js';
 import { getSpecies, getMoves, getAbilities } from '../core/data.js';
 import {
@@ -11,12 +11,12 @@ import {
 import {
   diceClassFor, effectiveDice, expForNextLevel, possibleLevelUps, levelUp, undoLevelUp,
   calcAccuracy, calcEvasion, BATTLE_STATS, battleValue, heal,
-  evolve, evolutionRollCount, mapAbilities,
+  evolve, evolutionRollCount, mapAbilities, pendingBonusPoints, assignBonusPoint,
 } from '../core/rules.js';
 import { describeMoveEffects } from '../core/effects.js';
 import { isCustomForm, allowedGenders, learnableMoves } from '../core/model.js';
 import {
-  spriteImg, typeBadge, typeOptions, bindFields, dhBanner, boxTrack, clickTrack,
+  spriteImg, typeBadge, typeOptions, bindFields, dhBanner,
 } from './shared.js';
 
 const BATTLE_LABELS = { ...STAT_LABELS, initiative: 'Kampf-Init.' };
@@ -48,7 +48,8 @@ export async function render(app, uuid) {
     <datalist id="ability-dl">${Object.values(abilities).map((a) => `<option value="${esc(a.n)}">`).join('')}</datalist>
     <datalist id="ability-dl-species">${info.abilities.map((a) => `<option value="${esc(abilities[a]?.n || a)}">`).join('')}</datalist>
     <div id="sheet" class="sheet dh-sheet pokemon-sheet"></div>
-    <dialog id="evo-dlg" class="evo-dlg"></dialog>`;
+    <dialog id="evo-dlg" class="evo-dlg"></dialog>
+    <dialog id="pt-dlg" class="evo-dlg"></dialog>`;
   const sheet = root.querySelector('#sheet');
   const save = (m) => savePokemon(m);
 
@@ -59,8 +60,13 @@ export async function render(app, uuid) {
     const custom = isCustomForm(pk, info);
     const twin = listPokemon().find((p) => p.uuid !== pk.uuid && p.speciesId === pk.speciesId && p.nickname === pk.nickname);
     const lock = pk.unlocked ? '' : 'disabled title="Gesperrt – „Untypische Änderungen erlauben“ aktivieren"';
+    const pending = pendingBonusPoints(pk);
+    // Leuchtet, wenn eine Level-Bedingung ("Lv 30") einer möglichen Entwicklung erfüllt ist
+    const evoReady = (info.evo?.next || []).some((n) => {
+      const m = /Lv (\d+)/.exec(n.cond);
+      return m && pk.level >= +m[1];
+    });
     const hpPct = pk.stats.hp ? Math.max(0, Math.min(100, (pk.currentHp / pk.stats.hp) * 100)) : 0;
-    const fMax = settings.friendshipMax;
 
     sheet.style.setProperty('--accent', `var(--t-${pk.types[0] || 'normal'})`);
     sheet.innerHTML = `
@@ -94,6 +100,7 @@ export async function render(app, uuid) {
         ${twin ? `<span class="warn">⚠ Ein anderes ${esc(info.de)} heißt ebenfalls „${esc(pk.nickname)}“.</span>` : ''}
         <label>Typ <select data-f="types.0" data-rerender ${lock}>${typeOptions(pk.types[0])}</select></label>
         <select data-f="types.1" data-rerender ${lock} aria-label="Typ 2">${typeOptions(pk.types[1] || '', true)}</select>
+        ${pk.unlocked || pk.types[2] ? `<select data-f="types.2" data-rerender ${lock} aria-label="Typ 3" title="Dritter Typ – nur als Ausnahme">${typeOptions(pk.types[2] || '', true)}</select>` : ''}
         <span>${pk.types.map(typeBadge).join('')}</span>
         ${custom && pk.unlocked ? `
           <input data-f="formName" value="${esc(pk.formName)}" placeholder="Name der Form">
@@ -108,15 +115,51 @@ export async function render(app, uuid) {
         </label>
       </div>
 
-      <div class="dh-traits">
-        <label class="shield"><input type="number" data-f="accuracy" data-t="num" value="${pk.accuracy}"><small>ACCURACY</small></label>
-        <label class="shield"><input type="number" data-f="evasion" data-t="num" value="${pk.evasion}"><small>EVASION</small></label>
-        ${STATS.map((s) => `
-          <label class="trait">
-            <span class="banner">${STAT_LABELS[s]}</span>
-            <input type="number" min="0" class="trait-val" data-f="stats.${s}" data-t="num" data-rerender value="${pk.stats[s]}">
-            <small>Basis ${info.base[s]}</small>
-          </label>`).join('')}
+      <div class="dh-traits pk-traits">
+        <div class="acc-eva">
+          <div class="acc-eva-shields">
+            <label class="shield"><span class="shield-extra">&nbsp;</span><input type="number" data-f="accuracy" data-t="num" data-rerender value="${pk.accuracy}"><small>ACCURACY</small></label>
+            <label class="shield" title="In Klammern: tatsächlicher Abwehrwert (Evasion + 10)"><span class="shield-extra">(${(pk.evasion ?? 0) + 10})</span><input type="number" data-f="evasion" data-t="num" data-rerender value="${pk.evasion}"><small>EVASION</small></label>
+          </div>
+        </div>
+        <div class="pk-traits-main">
+          <div class="lvl-panel">
+            <span class="banner">LEVEL &amp; ERFAHRUNG</span>
+            <div class="row wrap">
+              <label>EXP <input type="number" min="0" data-f="exp" data-t="num" data-rerender value="${pk.exp}"></label>
+              <span class="muted">nächstes Level: ${need}</span>
+              <label title="${esc(dc.steps.join('\n'))}">Würfel
+                <select data-f="levelUp.diceOverride" data-t="nullable" data-rerender ${lock}>
+                  <option value="">Auto (${dc.dice})</option>
+                  ${settings.diceLadder.map((d) => `<option ${d === pk.levelUp.diceOverride ? 'selected' : ''}>${d}</option>`).join('')}
+                </select>
+              </label>
+              <details class="dc-why"><summary>Warum ${dc.dice}?</summary><ul>${dc.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></details>
+              <label>Primär <select data-f="levelUp.primary" data-rerender>${statOptions(pk.levelUp.primary)}</select></label>
+              <label>Sekundär <select data-f="levelUp.secondary" data-rerender>${statOptions(pk.levelUp.secondary, pk.levelUp.primary)}</select></label>
+            </div>
+            <div class="row wrap no-print">
+              ${possible > 1 ? `
+                <select id="lvl-qty" aria-label="Anzahl Levelups">${Array.from({ length: possible }, (_, i) =>
+                  `<option value="${i + 1}" ${i + 1 === possible ? 'selected' : ''}>${i + 1}</option>`).join('')}</select>` : ''}
+              <button data-act="levelup" class="primary" ${possible ? '' : 'disabled'}>⬆ ${possible > 1 ? 'Levelups' : 'Levelup'}</button>
+              <button data-act="levelup-free" ${pk.level < 100 ? '' : 'disabled'} title="Level ohne EXP-Kosten, z.B. vom Spielleiter">+1 Level ohne EXP</button>
+              <button data-act="undo" ${pk.levelLog.length ? '' : 'disabled'} title="Letztes Levelup bzw. letzte Entwicklung rückgängig machen">↶ Rückgängig</button>
+              ${info.evo?.next?.length ? `<button data-act="evolve" class="evo-btn ${evoReady ? 'ready' : ''}"
+                title="${evoReady ? 'Level-Bedingung für eine Entwicklung erfüllt' : 'Entwicklung auswählen'}">✨ Entwickeln</button>` : ''}
+              ${pending.length ? `<button data-act="points" class="pt-open" title="Ab Lv ${settings.accEvaStart} alle ${settings.accEvaEvery} Level: +1 Accuracy oder Evasion">🎯 ${pending.length} Punkt${pending.length > 1 ? 'e' : ''} für Accuracy/Evasion offen</button>` : ''}
+            </div>
+            <p class="muted small">${possible ? `${possible} Levelup${possible > 1 ? 's' : ''} möglich · ` : ''}Würfel ${effectiveDice(pk, info, settings)} · ${settings.rerollOnes ? '1en werden neu gewürfelt' : '1en zählen'} · KP ×${settings.hpMultiplier} · Initiative ×${settings.speedMultiplier}</p>
+          </div>
+          <div class="stat-row">
+            ${STATS.map((s) => `
+              <label class="trait">
+                <span class="banner">${STAT_LABELS[s]}</span>
+                <input type="number" min="0" class="trait-val" data-f="stats.${s}" data-t="num" data-rerender value="${pk.stats[s]}">
+                <small>Basis ${info.base[s]}</small>
+              </label>`).join('')}
+          </div>
+        </div>
       </div>
 
       <div class="dh-cols">
@@ -144,40 +187,6 @@ export async function render(app, uuid) {
           </section>
 
           <section class="dh-sec">
-            ${dhBanner('Freundschaft')}
-            <div class="track"><b>${pk.friendship} / ${fMax}</b>${boxTrack('friendship', fMax, pk.friendship)}</div>
-          </section>
-
-          <section class="dh-sec">
-            ${dhBanner('Level &amp; Erfahrung')}
-            <div class="row wrap">
-              <label>EXP <input type="number" min="0" data-f="exp" data-t="num" data-rerender value="${pk.exp}"></label>
-              <span class="muted">nächstes Level: ${need}</span>
-              <label title="${esc(dc.steps.join('\n'))}">Würfel
-                <select data-f="levelUp.diceOverride" data-t="nullable" data-rerender ${lock}>
-                  <option value="">Auto (${dc.dice})</option>
-                  ${settings.diceLadder.map((d) => `<option ${d === pk.levelUp.diceOverride ? 'selected' : ''}>${d}</option>`).join('')}
-                </select>
-              </label>
-            </div>
-            <details class="dc-why"><summary>Warum ${dc.dice}?</summary><ul>${dc.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></details>
-            <div class="row wrap">
-              <label>Primär <select data-f="levelUp.primary" data-rerender>${statOptions(pk.levelUp.primary)}</select></label>
-              <label>Sekundär <select data-f="levelUp.secondary" data-rerender>${statOptions(pk.levelUp.secondary, pk.levelUp.primary)}</select></label>
-            </div>
-            <div class="row wrap no-print">
-              ${possible > 1 ? `
-                <select id="lvl-qty" aria-label="Anzahl Levelups">${Array.from({ length: possible }, (_, i) =>
-                  `<option value="${i + 1}" ${i + 1 === possible ? 'selected' : ''}>${i + 1}</option>`).join('')}</select>` : ''}
-              <button data-act="levelup" class="primary" ${possible ? '' : 'disabled'}>⬆ ${possible > 1 ? 'Levelups' : 'Levelup'}</button>
-              <button data-act="levelup-free" ${pk.level < 100 ? '' : 'disabled'} title="Level ohne EXP-Kosten, z.B. vom Spielleiter">+1 Level ohne EXP</button>
-              <button data-act="undo" ${pk.levelLog.length ? '' : 'disabled'} title="Letztes Levelup bzw. letzte Entwicklung rückgängig machen">↶ Rückgängig</button>
-              ${info.evo?.next?.length ? '<button data-act="evolve" title="Entwicklung auswählen">✨ Entwickeln</button>' : ''}
-            </div>
-            <p class="muted small">${possible ? `${possible} Levelup${possible > 1 ? 's' : ''} möglich · ` : ''}Würfel ${effectiveDice(pk, info, settings)} · ${settings.rerollOnes ? '1en werden neu gewürfelt' : '1en zählen'} · KP ×${settings.hpMultiplier} · Initiative ×${settings.speedMultiplier}</p>
-          </section>
-
-          <section class="dh-sec">
             ${dhBanner('Schwächen &amp; Resistenzen')}
             ${weaknesses(pk.types)}
           </section>
@@ -195,7 +204,9 @@ export async function render(app, uuid) {
             <p class="muted small">Spiel-Fähigkeiten: ${info.abilities.map((a) =>
               `${esc(abilities[a]?.n || a)}${a === info.hiddenAbility ? ' (versteckt)' : ''}`).join(', ') || '–'}</p>
             ${pk.abilities.map((a, i) => abilityRow(a, i, abilities, info, pk.unlocked)).join('')}
-            <button data-act="add-ability" class="no-print">+ Fähigkeit</button>
+            ${pk.abilities.length < MAX_ABILITIES
+              ? '<button data-act="add-ability" class="no-print">+ Fähigkeit</button>'
+              : `<p class="muted small">Maximal ${MAX_ABILITIES} Fähigkeiten.</p>`}
           </section>
 
           <section class="dh-sec">
@@ -215,7 +226,7 @@ export async function render(app, uuid) {
 
   bindFields(sheet, () => pk, {
     save: (m) => {
-      m.types = m.types.filter(Boolean); // "—" bei Typ 2 entfernt den Typ
+      m.types = [...new Set(m.types.filter(Boolean))].slice(0, MAX_TYPES); // "—" entfernt einen Typ, doppelte fallen weg
       if (m.levelUp.secondary === m.levelUp.primary) {
         m.levelUp.secondary = STATS.find((s) => s !== m.levelUp.primary);
       }
@@ -271,11 +282,10 @@ export async function render(app, uuid) {
     if (!btn) return;
     const d = btn.dataset;
 
-    // Kampfwerte ±Level / Reset, Freundschafts-Kästchen
+    // Kampfwerte ±Level / Reset
     if (d.bmod) pk.battle.mods[d.bmod] += +d.step;
     else if (d.breset) pk.battle.mods[d.breset] = 0;
-    else if (d.track === 'friendship') pk.friendship = clickTrack(pk.friendship, +d.i);
-    if (d.bmod || d.breset || d.track) {
+    if (d.bmod || d.breset) {
       save(pk);
       draw();
       return;
@@ -319,7 +329,11 @@ export async function render(app, uuid) {
         pk.formName = '';
       },
       'add-ability'() {
-        pk.abilities.push('');
+        if (pk.abilities.length < MAX_ABILITIES) pk.abilities.push('');
+      },
+      points() {
+        openPoints();
+        return 'navigated';
       },
       export() {
         downloadJson(`Pokemon_${safeName(pk.nickname || info.de)}_Lv${pk.level}_${today()}.json`, bundle({ pokemon: [pk] }));
@@ -345,30 +359,99 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
         return 'navigated';
       },
     };
+    const pendingBefore = pendingBonusPoints(pk).length;
     if (!actions[act] || actions[act]() === 'navigated') return;
     save(pk);
     draw();
-    if (act.startsWith('levelup')) sheet.querySelector('.level-log li')?.classList.add('flash');
+    if (act.startsWith('levelup')) {
+      sheet.querySelector('.level-log li')?.classList.add('flash');
+      if (pendingBonusPoints(pk).length > pendingBefore) openPoints(); // neuer Punkt → direkt fragen
+    }
+  });
+
+  // ---------------------------------------------------------------- Accuracy/Evasion-Punkte
+  const ptDlg = root.querySelector('#pt-dlg');
+
+  function openPoints() {
+    const open = pendingBonusPoints(pk);
+    if (!open.length) return;
+    ptDlg.innerHTML = `
+      <form method="dialog">
+        <h3>🎯 Punkt für Accuracy oder Evasion</h3>
+        <p class="muted small">Ab Level ${settings.accEvaStart} gibt es alle ${settings.accEvaEvery} Level einen Punkt.
+          Erhöhungen durch Story-Ereignisse trägst du einfach direkt im Feld ein.</p>
+        ${open.map((e) => `
+          <div class="evo-choice pt-row">
+            <b>Lv ${e.bonusLevel}</b>
+            <label class="chip"><input type="radio" name="pt-${e.bonusLevel}" value="accuracy"> +1 Accuracy <span class="muted">(${pk.accuracy})</span></label>
+            <label class="chip"><input type="radio" name="pt-${e.bonusLevel}" value="evasion"> +1 Evasion <span class="muted">(${pk.evasion}, Abwehr ${(pk.evasion ?? 0) + 10})</span></label>
+          </div>`).join('')}
+        <div class="row wrap">
+          <button value="cancel">Später entscheiden</button>
+          <button value="ok" class="primary">Übernehmen</button>
+        </div>
+      </form>`;
+    ptDlg.showModal();
+  }
+
+  ptDlg.addEventListener('submit', (e) => {
+    if (e.submitter?.value !== 'ok') return;
+    const form = new FormData(e.target);
+    for (const entry of pendingBonusPoints(pk)) {
+      const stat = form.get(`pt-${entry.bonusLevel}`);
+      if (stat) assignBonusPoint(pk, entry, stat); // nicht gewählte bleiben offen
+    }
+    save(pk);
+    draw();
   });
 
   // ---------------------------------------------------------------- Entwickeln-Dialog
   const dlg = root.querySelector('#evo-dlg');
-  let evo = null; // { targets: [{ info, cond }], index, abilities, types }
+  // { targets: [{ info, cond }], index, selected: [Fähigkeiten], custom, customTypes, formName, dice }
+  let evo = null;
+
+  /** Empfohlene Fähigkeiten: positionsgenau ersetzt, eigene Änderungen bleiben. */
+  const recommended = (to) => mapAbilities(pk.abilities, info, to).filter(Boolean).slice(0, MAX_ABILITIES);
+  const target = () => evo.targets[evo.index].info;
 
   async function openEvolution() {
     const targets = await Promise.all(info.evo.next.map(async (n) => ({ info: await getSpecies(n.id), cond: n.cond })));
-    evo = { targets, index: 0, abilities: 'replace', types: isCustomForm(pk, info) ? 'keep' : 'new' };
+    // Ist das Pokémon schon eine Custom-Form, startet der Dialog mit deren Typen
+    const custom = isCustomForm(pk, info);
+    evo = {
+      targets, index: 0, selected: recommended(targets[0].info),
+      custom, customTypes: custom ? [...pk.types] : [...targets[0].info.types], formName: pk.formName,
+      dice: pk.levelUp.diceOverride ?? '',
+    };
     drawEvolution();
     dlg.showModal();
   }
 
+  /** Einordnung einer Fähigkeit für die Markierung im Dialog. */
+  function abilityStatus(a, to) {
+    const now = pk.abilities.includes(a);
+    if (!abilities[a]) return ['custom', 'eigene Fähigkeit'];
+    if (now && to.abilities.includes(a)) return ['keep', 'bleibt'];
+    if (now && info.abilities.includes(a)) return ['lost', 'fällt üblicherweise weg'];
+    if (now) return ['custom', 'eigene Änderung'];
+    return ['new', 'kommt üblicherweise dazu'];
+  }
+
+  /** Untypisch: eine Fähigkeit behalten, die die neue Art nicht hat, oder eine neue feste Würfelklasse wählen. */
+  const untypicalChoice = (to) =>
+    evo.selected.some((a) => !to.abilities.includes(a) && info.abilities.includes(a))
+    || (evo.dice !== '' && evo.dice !== (pk.levelUp.diceOverride ?? ''));
+
   function drawEvolution() {
-    const to = evo.targets[evo.index].info;
-    const custom = isCustomForm(pk, info);
-    const dice = pk.levelUp.diceOverride || diceClassFor(to, settings).dice;
+    const to = target();
+    const auto = diceClassFor(to, settings);
+    const usedDice = evo.dice || auto.dice;
     const count = evolutionRollCount(pk.level);
     const abName = (a) => esc(abilities[a]?.n || a);
-    const preview = (evo.abilities === 'replace' ? mapAbilities(pk.abilities, info, to) : pk.abilities).filter(Boolean);
+    // Erst die Fähigkeiten der neuen Art, dann alles, was das Pokémon sonst noch hat
+    const candidates = [...new Set([...to.abilities, ...pk.abilities.filter(Boolean)])];
+    const willUnlock = !pk.unlocked && (evo.custom || untypicalChoice(to));
+    const full = evo.selected.length >= MAX_ABILITIES;
     dlg.innerHTML = `
       <form method="dialog" class="evo-form">
         <h3>✨ Entwicklung: ${esc(pk.nickname || info.de)} <span class="muted">(${esc(info.de)})</span></h3>
@@ -382,28 +465,55 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
             </label>`).join('')}
         </div>
 
-        <p><b>Bonus:</b> jeder Statuswert bekommt ${count}× ${esc(dice)}
-          <span class="muted">(⌈Lv ${pk.level} / 10⌉ Würfe, Würfelklasse der neuen Art${settings.rerollOnes ? ', 1en werden neu gewürfelt' : ''}, KP ×${settings.hpMultiplier})</span></p>
-
-        <label class="evo-choice">Fähigkeiten
-          <select name="abilities">
-            <option value="replace" ${evo.abilities === 'replace' ? 'selected' : ''}>durch passende Fähigkeiten von ${esc(to.de)} ersetzen</option>
-            <option value="keep" ${evo.abilities === 'keep' ? 'selected' : ''}>unverändert lassen</option>
+        <h4>Würfelklasse</h4>
+        <div class="evo-choice">
+          <select name="dice">
+            <option value="" ${evo.dice === '' ? 'selected' : ''}>Auto: ${esc(auto.dice)} (Würfelklasse von ${esc(to.de)})</option>
+            ${settings.diceLadder.map((d) => `<option ${d === evo.dice ? 'selected' : ''}>${esc(d)}</option>`).join('')}
           </select>
-        </label>
-        <p class="muted small">Ergebnis: ${preview.map(abName).join(', ') || '–'}</p>
+          <details class="dc-why"><summary>Warum ${esc(auto.dice)}?</summary><ul>${auto.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></details>
+        </div>
+        <p class="muted small">Gilt für den Entwicklungsbonus und alle künftigen Levelups${pk.levelUp.diceOverride ? ` · bisher eigene Klasse ${esc(pk.levelUp.diceOverride)}` : ''}.</p>
+        <p><b>Bonus:</b> jeder Statuswert bekommt ${count}× ${esc(usedDice)}
+          <span class="muted">(⌈Lv ${pk.level} / 10⌉ Würfe${settings.rerollOnes ? ', 1en werden neu gewürfelt' : ''}, KP ×${settings.hpMultiplier})</span></p>
 
-        ${custom ? `
-        <label class="evo-choice">Typen
-          <select name="types">
-            <option value="keep" ${evo.types === 'keep' ? 'selected' : ''}>Custom-Typen behalten</option>
-            <option value="new" ${evo.types === 'new' ? 'selected' : ''}>Typen von ${esc(to.de)} übernehmen</option>
-          </select>
-        </label>
-        <p class="muted small">Ergebnis: ${(evo.types === 'keep' ? pk.types : to.types).map(typeBadge).join('')}</p>`
-        : `<p class="muted small">Typen: ${to.types.map(typeBadge).join('')}</p>`}
+        <h4>Fähigkeiten</h4>
+        <div class="evo-choice">
+          <button type="button" data-preset="recommended" title="Passende Fähigkeiten der neuen Art, eigene Änderungen bleiben">Empfehlung</button>
+          <button type="button" data-preset="keep">Alles behalten</button>
+          <button type="button" data-preset="new">Nur ${esc(to.de)}</button>
+        </div>
+        <p class="muted small">${evo.selected.length} / ${MAX_ABILITIES} gewählt${full ? ' – zum Tauschen erst eine abwählen' : ''}</p>
+        <div class="evo-abilities">
+          ${candidates.map((a) => {
+            const [cls, label] = abilityStatus(a, to);
+            return `
+            <label class="evo-ab">
+              <input type="checkbox" name="ability" value="${esc(a)}" ${evo.selected.includes(a) ? 'checked' : full ? 'disabled' : ''}>
+              <span><b>${abName(a)}</b> <span class="ab-tag ${cls}">${label}</span>
+                ${a === to.hiddenAbility ? '<span class="badge">versteckt</span>' : ''}
+                ${abilities[a] ? `<small class="muted">${esc(abilities[a].d)}</small>` : ''}</span>
+            </label>`;
+          }).join('')}
+        </div>
 
-        <p class="muted small">Level, EXP, Statuswerte, Attacken, Spitzname und Freundschaft bleiben erhalten. Die Entwicklung lässt sich über „↶ Rückgängig“ zurücknehmen.</p>
+        <h4>Typen</h4>
+        <div class="evo-choice">
+          <label class="unlock ${evo.custom ? 'on' : ''}" title="Bei der Entwicklung entsteht eine eigene Form mit frei gewählten Typen">
+            <input type="checkbox" name="customForm" ${evo.custom ? 'checked' : ''}> 🔓 Custom-Form
+          </label>
+        </div>
+        ${evo.custom ? `
+        <div class="evo-choice">
+          ${Array.from({ length: MAX_TYPES }, (_, i) => `
+            <select name="type${i}" aria-label="Typ ${i + 1}">${typeOptions(evo.customTypes[i] || '', i > 0)}</select>`).join('')}
+          <input name="formName" value="${esc(evo.formName)}" placeholder="Name der Form (optional)">
+        </div>
+        <p class="muted small">Ergebnis: ${[...new Set(evo.customTypes.filter(Boolean))].map(typeBadge).join('')}</p>`
+        : `<p class="muted small">Ergebnis: ${to.types.map(typeBadge).join('')} (Typen von ${esc(to.de)})</p>`}
+
+        ${willUnlock ? '<p class="warn">Diese Auswahl ist untypisch und schaltet „Untypische Änderungen erlauben“ für dieses Pokémon frei.</p>' : ''}
+        <p class="muted small">Level, EXP, Statuswerte, Attacken und Spitzname bleiben erhalten. Die Entwicklung lässt sich über „↶ Rückgängig“ zurücknehmen.</p>
         <div class="row wrap">
           <button value="cancel">Abbrechen</button>
           <button value="ok" class="primary">✨ Zu ${esc(to.de)} entwickeln</button>
@@ -412,17 +522,43 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
   }
 
   dlg.addEventListener('change', (e) => {
-    const { name, value } = e.target;
-    if (name === 'target') evo.index = +value;
-    if (name === 'abilities') evo.abilities = value;
-    if (name === 'types') evo.types = value;
+    const { name, value, checked } = e.target;
+    if (name === 'formName') return; // Textfeld: siehe "input", kein Neuzeichnen (Fokus bleibt)
+    if (name === 'target') {
+      evo.index = +value;
+      evo.selected = recommended(target());
+      if (!evo.custom) evo.customTypes = [...target().types];
+    }
+    if (name === 'dice') evo.dice = value;
+    if (name === 'ability') evo.selected = [...dlg.querySelectorAll('input[name="ability"]:checked')].map((x) => x.value);
+    if (name === 'customForm') evo.custom = checked;
+    if (name?.startsWith('type')) evo.customTypes[+name.slice(4)] = value;
+    drawEvolution();
+  });
+  dlg.addEventListener('input', (e) => {
+    if (e.target.name === 'formName') evo.formName = e.target.value;
+  });
+  // Schnellauswahl Fähigkeiten
+  dlg.addEventListener('click', (e) => {
+    const preset = e.target.closest('[data-preset]')?.dataset.preset;
+    if (!preset) return;
+    const to = target();
+    evo.selected = (preset === 'recommended' ? recommended(to)
+      : preset === 'keep' ? pk.abilities.filter(Boolean)
+        : [...to.abilities]).slice(0, MAX_ABILITIES);
     drawEvolution();
   });
 
   // Formular mit method="dialog": "submit" kommt direkt beim Klick (zuverlässiger als "close")
   dlg.addEventListener('submit', (e) => {
     if (e.submitter?.value !== 'ok' || !evo) return;
-    evolve(pk, info, evo.targets[evo.index].info, settings, { abilities: evo.abilities, types: evo.types });
+    const to = target();
+    evolve(pk, info, to, settings, {
+      abilities: evo.selected,
+      customForm: evo.custom ? { types: evo.customTypes, formName: evo.formName.trim() } : null,
+      dice: evo.dice || null,
+      unlock: untypicalChoice(to),
+    });
     save(pk);
     evo = null;
     render(app, uuid); // neue Art → Bogen mit neuen Artdaten neu aufbauen
@@ -461,7 +597,7 @@ function battleRow(pk, s) {
 function weaknesses(types) {
   const m = defensiveMatchups(types);
   const groups = [
-    [4, '×4'], [2, '×2'], [0.5, '×½'], [0.25, '×¼'], [0, 'immun'],
+    [8, '×8'], [4, '×4'], [2, '×2'], [0.5, '×½'], [0.25, '×¼'], [0.125, '×⅛'], [0, 'immun'],
   ].map(([f, label]) => [label, Object.keys(m).filter((t) => m[t] === f)]).filter(([, list]) => list.length);
   return `
     <div class="matchups">${groups.map(([label, list]) => `

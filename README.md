@@ -5,7 +5,7 @@ Pokémon- und Trainerbögen für die Lokono-Kampagne. Das Tool ist der Nachfolge
 Es ist eine reine statische Webseite (HTML/CSS/JavaScript ohne Build-Schritt) und lässt sich auf GitHub Pages hosten.
 
 ➡ **Hosting & Veröffentlichen:** siehe [ANLEITUNG_GITHUB.md](ANLEITUNG_GITHUB.md)
-➡ **Lokal starten:** `python -m http.server 8000` → <http://localhost:8000>
+➡ **Lokal starten:** `python tools/serve.py` → <http://localhost:8000> (ohne Browser-Cache)
 
 ## Was das Tool kann
 
@@ -15,28 +15,34 @@ Es ist eine reine statische Webseite (HTML/CSS/JavaScript ohne Build-Schritt) un
 - **Schalter „Untypische Änderungen erlauben“** (pro Pokémon, standardmäßig aus 🔒). Ohne ihn gilt:
   Typen und Würfelklasse sind gesperrt, Attacken nur aus dem Lernset der Art, Fähigkeiten nur die der Art,
   Geschlecht nur wie im Spiel möglich. Mit 🔓 ist alles frei wählbar. Untypische Einträge tragen den Hinweis „nicht arttypisch“
-- **Custom-Formen** (bei 🔓): Typen frei änderbar, optional mit Formnamen und Rücksetz-Knopf
-- **Schwächen & Resistenzen** anhand der aktuellen Typen (also auch für Custom-Formen)
+- **Custom-Formen** (bei 🔓): Typen frei änderbar – als Ausnahme auch ein **dritter Typ** –, optional mit Formnamen und Rücksetz-Knopf
+- **Schwächen & Resistenzen** anhand der aktuellen Typen (auch für Custom-Formen und 3 Typen, bis ×8 bzw. ×⅛)
 - **Zusatzeffekte mit Wahrscheinlichkeit** aus den Spieldaten bei jeder Attacke, z.B. „10 %: Einfrieren“, „20 %: Vert. −1 (Ziel)“, „2–5 Treffer“
 - **Kampfwerte als Momentaufnahme:** Angriff, Verteidigung, Sp. Angriff, Sp. Verteidigung und Kampf-Initiative (Wurf zu Kampfbeginn eintragen). „+“ und „−“ verändern um je 1× Level. Die Statuswerte selbst bleiben unverändert; Reset pro Wert oder für alle
 - **❤ Heilen:** KP voll, Kampfwerte zurückgesetzt, Statusprobleme entfernt
-- **Freundschaft** als Kästchen-Leiste wie HP/Stress (Maximum unter „Regeln & Würfel“, Standard 10). Strichlisten aus alten Bögen werden übernommen
 - **Spitzname** als Alleinstellungsmerkmal. Intern hat jedes Pokémon eine eindeutige ID, gleiche Art + gleicher Spitzname löst eine Warnung aus. Mit „Duplizieren“ entstehen Varianten
 - **Levelup** wie bisher: Pro Level gibt es zwei Würfe der Würfelklasse, einen auf einen zufälligen Wert und einen auf die Primärwahl (Sekundärwahl, falls der Zufall die Primärwahl schon getroffen hat). KP-Zuwachs ×3, Initiative ohne Multiplikator
   - gewürfelte **1en werden neu gewürfelt** (pro Würfel, bis keine 1 mehr fällt)
   - **Levelup-Protokoll** mit jedem einzelnen Würfel; neu gewürfelte 1en sind durchgestrichen sichtbar
   - bei mehreren möglichen Levelups: **Anzahl auswählbar**
+  - **ab Lv 10 alle 5 Level** fragt ein Dialog nach **+1 Accuracy oder +1 Evasion** („Später“ → offener Punkt unter den Schilden);
+    Startlevel und Abstand unter „Regeln & Würfel“. Story-Erhöhungen direkt im Feld
+- **Evasion** zeigt in Klammern den tatsächlichen Abwehrwert (Evasion + 10)
+- Höchstens **3 Fähigkeiten** pro Pokémon
   - letztes Levelup exakt rückgängig machbar; „+1 Level ohne EXP“ für Spielleiter-Level
 - **✨ Entwickeln:** Ein Dialog zeigt alle möglichen Entwicklungen mit der Bedingung aus dem Spiel
   (z.B. „Lv 30“, „Wasserstein“, „Tausch, trägt King-Stein“; Regionalformen → passende Regionalform).
-  Im Dialog wählst du, ob die Fähigkeiten durch die passenden der neuen Art ersetzt werden und ob Custom-Typen bleiben.
-  Level, EXP, Werte, Attacken, Spitzname und Freundschaft bleiben. Bonus: jeder Statuswert bekommt ⌈Level/10⌉ Würfe
+  Im Dialog wählst du die **Würfelklasse** (Auto = neue Art, oder fest – gilt auch für künftige Levelups) und die
+  **Fähigkeiten** per Checkliste mit Markierungen „bleibt“, „fällt üblicherweise weg“, „kommt üblicherweise dazu“,
+  „eigene Änderung“ (Schnellwahl: Empfehlung / Alles behalten / Nur neue Art). Der Knopf **🔓 Custom-Form**
+  lässt bei der Entwicklung eine eigene Form mit 1–3 frei gewählten Typen entstehen. Untypische Auswahl schaltet 🔓 frei.
+  Level, EXP, Werte, Attacken und Spitzname bleiben. Bonus: jeder Statuswert bekommt ⌈Level/10⌉ Würfe
   der neuen Würfelklasse (KP ×3, 1en neu gewürfelt). Alles steht im Protokoll und ist rückgängig machbar
 - Accuracy & Evasion statt GENA & PA. Wunden, Fertigkeiten und Bewegung entfallen
 
 **Trainer-Bogen** im Daggerheart-Stil (wie das PDF)
 - Name, Pronouns, Class, Boon, Level, Evasion, Capacity, die 6 Traits
-- Damage Thresholds (+Level), HP- und Stress-Leisten, Hope, Experiences, Class Feature
+- Damage Thresholds (+Level), HP- und Stress-Leisten, Hope, Experiences, beliebig viele Class Features (je Name + Effekt)
 - **Team** mit den eigenen Pokémon (aktiv/inaktiv), Orden, Inventar, Notizen
 
 **Allgemein**
@@ -71,6 +77,7 @@ data/                    Original-Spieldaten, ERZEUGT von tools/build_data.py, n
   moves.json             937 Attacken      abilities.json   314 Fähigkeiten
 homebrew/homebrew.json   Eigene Inhalte, gelten für alle Nutzer der Seite
 tools/build_data.py      Erzeugt data/ aus der PokéAPI (mit Cache)
+tools/serve.py           Lokaler Testserver ohne Browser-Cache
 tests/index.html         Browser-Tests: http://localhost:8000/tests/
 ```
 

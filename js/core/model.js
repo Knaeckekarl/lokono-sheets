@@ -31,7 +31,6 @@ const pokemonDefaults = () => ({
   gender: 'neutral',
   shiny: false,
   status: [],
-  friendship: 0,
   // Kampf-Momentaufnahme: mods = Stufen (× Level), initiative = zu Kampfbeginn erwürfelt
   battle: { initiative: null, mods: { attack: 0, defense: 0, spAttack: 0, spDefense: 0, initiative: 0 } },
   notes: '',
@@ -46,7 +45,8 @@ export function normalizePokemon(pk) {
   out.levelUp = { ...d.levelUp, ...pk.levelUp };
   out.battle = { ...d.battle, ...pk.battle, mods: { ...d.battle.mods, ...pk.battle?.mods } };
   while (out.moves.length < 4) out.moves.push(null);
-  delete out.movement; // Bewegung entfällt (alte Speicherstände)
+  delete out.movement;   // Bewegung entfällt (alte Speicherstände)
+  delete out.friendship; // Freundschaft entfällt
   return out;
 }
 
@@ -105,7 +105,7 @@ const trainerDefaults = () => ({
   hope: 2,
   hopeFeature: '',
   experiences: [{ text: '', bonus: 2 }, { text: '', bonus: 2 }],
-  classFeature: '',
+  classFeatures: [{ name: '', effect: '' }], // beliebig viele, je Name + Effekt
   badges: Array(8).fill(false),
   team: [],             // [{ uuid, active }] – Reihenfolge & Aktiv/Inaktiv
   inventory: '',
@@ -116,7 +116,7 @@ const trainerDefaults = () => ({
 
 export function normalizeTrainer(t) {
   const d = trainerDefaults();
-  return {
+  const out = {
     ...d,
     ...t,
     traits: { ...d.traits, ...t.traits },
@@ -124,6 +124,10 @@ export function normalizeTrainer(t) {
     hp: { ...d.hp, ...t.hp },
     stress: { ...d.stress, ...t.stress },
   };
+  // Früher gab es nur ein Textfeld "classFeature" → wird zum ersten Class Feature
+  if (!t.classFeatures && t.classFeature) out.classFeatures = [{ name: '', effect: t.classFeature }];
+  delete out.classFeature;
+  return out;
 }
 
 export const createTrainer = (name = '') => normalizeTrainer({ name });

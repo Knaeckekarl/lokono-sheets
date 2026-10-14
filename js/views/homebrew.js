@@ -7,7 +7,7 @@
 //     GitHub-Pages-Deploy (~1 Min.) für ALLE aktiv.
 
 import { esc, downloadJson } from '../core/util.js';
-import { MOVE_CATEGORIES, STATS, STAT_LABELS } from '../core/constants.js';
+import { MOVE_CATEGORIES, STATS, STAT_LABELS, MAX_ABILITIES } from '../core/constants.js';
 import {
   getHomebrew, getPublishedHomebrew, getDraft, setDraft, getMoves, getAbilities, HOMEBREW_ID_START,
 } from '../core/data.js';
@@ -217,6 +217,7 @@ function buildPokemon(f, hb, nameToMove, nameToAbility) {
   const abilities = f.abilities.split(',').filter((x) => x.trim()).map(ability);
   const hidden = f.hidden.trim() ? ability(f.hidden) : null;
   if (hidden && !abilities.includes(hidden)) abilities.push(hidden);
+  if (abilities.length > MAX_ABILITIES) throw new Error(`Ein Pokémon hat höchstens ${MAX_ABILITIES} Fähigkeiten (inkl. versteckter).`);
   return {
     id: +f.id || Math.max(HOMEBREW_ID_START - 1, ...hb.pokemon.map((p) => p.id)) + 1,
     de: f.de.trim(),

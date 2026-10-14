@@ -36,10 +36,15 @@ export const MOVE_CATEGORIES = { physical: 'Physisch', special: 'Speziell', stat
 
 export const STATUS_EFFECTS = [
   'Verbrannt', 'Vergiftet', 'Schwer vergiftet', 'Paralysiert',
-  'Schlafend', 'Eingefroren', 'Verwirrt', 'Zurückgeschreckt',
+  'Schlafend', 'Eingefroren', 'Verwirrt', 'Zurückgeschreckt', 'Verflucht',
 ];
 
 export const GENDERS = { male: '♂', female: '♀', neutral: '○' };
+
+// Ein Pokémon hat 1–2 Typen; ein dritter ist nur als Ausnahme (🔓 Custom-Form) möglich.
+export const MAX_TYPES = 3;
+// Ein Pokémon hat höchstens 3 Fähigkeiten.
+export const MAX_ABILITIES = 3;
 
 // Daggerheart-Trainerbogen (siehe PDF)
 export const TRAINER_TRAITS = [

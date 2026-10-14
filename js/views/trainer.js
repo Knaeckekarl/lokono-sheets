@@ -87,8 +87,16 @@ export async function render(app, id) {
           </section>
 
           <section class="dh-sec">
-            <h3 class="dh-banner">CLASS FEATURE</h3>
-            <textarea data-f="classFeature" rows="8">${esc(t.classFeature)}</textarea>
+            <h3 class="dh-banner">CLASS FEATURES</h3>
+            ${t.classFeatures.map((cf, i) => `
+              <div class="cf-item">
+                <div class="cf-head">
+                  <input class="cf-name" data-f="classFeatures.${i}.name" value="${esc(cf.name)}" placeholder="Name des Features">
+                  <button class="mini no-print" data-act="del-cf" data-i="${i}" title="Feature entfernen">×</button>
+                </div>
+                <textarea class="cf-effect" data-f="classFeatures.${i}.effect" rows="5" placeholder="Effekt">${esc(cf.effect)}</textarea>
+              </div>`).join('')}
+            <button class="no-print" data-act="add-cf">+ Class Feature</button>
           </section>
         </div>
 
@@ -171,6 +179,12 @@ export async function render(app, id) {
     else if (d.badge) t.badges[d.badge] = !t.badges[d.badge];
     else if (d.act === 'add-exp') t.experiences.push({ text: '', bonus: 2 });
     else if (d.act === 'del-exp') t.experiences.splice(+d.i, 1);
+    else if (d.act === 'add-cf') t.classFeatures.push({ name: '', effect: '' });
+    else if (d.act === 'del-cf') {
+      const cf = t.classFeatures[+d.i];
+      if ((cf.name || cf.effect) && !confirm(`Class Feature „${cf.name || 'ohne Namen'}“ entfernen?`)) return;
+      t.classFeatures.splice(+d.i, 1);
+    }
     else if (d.act === 'assign') {
       const pk = getPokemon(sheet.querySelector('#assign-select').value);
       pk.trainerId = t.id;

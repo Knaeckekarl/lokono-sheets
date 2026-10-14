@@ -222,7 +222,7 @@ label { display: inline-flex; align-items: center; gap: 6px; }
 .hp-bar.low span { background: #d23b2b; }
 .heal-btn { margin-left: auto; font-weight: 600; }
 
-.bt-row { display: grid; grid-template-columns: 8.6em 4.2em 3.8em auto auto auto 1fr; gap: 6px; align-items: center; padding: 3px 0; border-bottom: 1px dashed var(--dh-soft); }
+.bt-row { display: grid; grid-template-columns: 8.6em 4.8em 3.8em auto auto auto 1fr; gap: 6px; align-items: center; padding: 3px 0; border-bottom: 1px dashed var(--dh-soft); }
 .bt-head { border: none; padding: 0; font-size: .75em; color: var(--muted); text-align: center; }
 .bt-base { text-align: center; color: var(--muted); font-weight: 600; }
 .bt-row b { font-size: .9rem; }
@@ -230,7 +230,7 @@ label { display: inline-flex; align-items: center; gap: 6px; }
 .bt-val.up { color: var(--up); }
 .bt-val.down { color: var(--danger); }
 .bt-row button { padding: 0 9px; font-weight: 700; }
-.bt-row input { width: 4.2em; text-align: center; font-weight: 700; font-size: 1.1rem; }
+.bt-row input { width: 4.8em; text-align: center; font-weight: 700; font-size: 1rem; }
 .bt-note { font-size: .8em; color: var(--muted); }
 
 .move-row, .ability-row { padding: 8px 0; border-bottom: 1px dashed var(--dh-soft); }
@@ -282,3 +282,43 @@ label { display: inline-flex; align-items: center; gap: 6px; }
 .evo-opt.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .evo-choice { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .log-evo > div { color: var(--accent); }
+
+/* Entwickeln-Dialog: Fähigkeiten-Auswahl */
+.evo-dlg { max-height: 92vh; overflow: auto; }
+.evo-dlg h4 { margin: 14px 0 4px; font-size: .95rem; }
+.evo-abilities { display: grid; gap: 2px; max-height: 34vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+.evo-ab { display: flex; align-items: flex-start; gap: 8px; padding: 4px 6px; border-radius: 6px; }
+.evo-ab:hover { background: var(--log-bg); }
+.evo-ab small { display: block; margin-top: 2px; }
+.ab-tag { font-size: .72em; padding: 0 6px; border-radius: 4px; border: 1px solid currentColor; white-space: nowrap; }
+.ab-tag.keep { color: var(--muted); }
+.ab-tag.lost { color: var(--danger); }
+.ab-tag.new { color: var(--up); }
+.ab-tag.custom { color: var(--warn); }
+
+/* Werte-Block Pokémon: Accuracy/Evasion links, Level & Entwicklung über den Statuswerten */
+.pk-traits { align-items: flex-end; flex-wrap: nowrap; }
+.acc-eva { display: flex; flex-direction: column; gap: 8px; align-items: center; flex: none; }
+.acc-eva-shields { display: flex; gap: 10px; }
+.shield-extra { font-size: .8rem; font-weight: 700; color: var(--muted); line-height: 1; margin-top: 6px; }
+.pt-open { border: 1px dashed var(--hope-on); background: color-mix(in srgb, var(--hope-on) 15%, var(--btn)); }
+.pt-row { align-items: center; margin: 6px 0; }
+.pk-traits-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.lvl-panel { border: 1px solid var(--dh-soft); border-radius: 8px; padding: 0 10px 2px; }
+.lvl-panel .banner { display: inline-block; margin-top: -1px; background: var(--dh-dark); color: var(--dh-dark-ink); font-weight: 700; font-size: .75rem; padding: 2px 8px; border-radius: 0 0 4px 4px; }
+.lvl-panel .row { margin: 6px 0; }
+.lvl-panel p { margin: 2px 0 6px; }
+.stat-row { display: flex; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 900px) { .pk-traits { flex-wrap: wrap; } }
+
+/* Entwickeln-Knopf hervorheben; leuchtet, wenn eine Level-Bedingung erfüllt ist */
+.evo-btn { background: linear-gradient(135deg, #8a5cf6, #e3350d); color: #fff; border-color: transparent; font-weight: 600; }
+.evo-btn:hover:not(:disabled) { background: linear-gradient(135deg, #9b70ff, #f2471f); }
+.evo-btn.ready { animation: evo-glow 1.8s ease-in-out infinite; }
+@keyframes evo-glow { 0%, 100% { box-shadow: 0 0 0 0 rgb(138 92 246 / 0); } 50% { box-shadow: 0 0 12px 3px rgb(138 92 246 / .65); } }
+
+/* Class Features (Trainer): je Name + großes Effektfeld */
+.cf-item { border: 1px solid var(--dh-soft); border-radius: 8px; padding: 6px 8px 8px; margin-bottom: 10px; }
+.cf-head { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.cf-name { flex: 1; font-weight: 700; border: none !important; border-bottom: 1px solid var(--dh-rule) !important; border-radius: 0; }
+.cf-effect { min-height: 7.5em; }

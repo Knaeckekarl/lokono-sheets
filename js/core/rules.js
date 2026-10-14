@@ -2,7 +2,7 @@
 // (bzw. die Einstellungen in der App, die DEFAULT_SETTINGS überschreiben).
 
 import { roll } from './dice.js';
-import { STATS } from './constants.js';
+import { STATS, MAX_TYPES, MAX_ABILITIES } from './constants.js';
 
 export const DEFAULT_SETTINGS = {
   // Würfelklassen in aufsteigender Reihenfolge
@@ -22,7 +22,8 @@ export const DEFAULT_SETTINGS = {
   rerollOnes: true,         // gewürfelte 1en werden neu gewürfelt (pro Würfel, bis keine 1)
   hpMultiplier: 3,          // KP-Erhöhung beim Levelup ×3
   speedMultiplier: 1,       // Initiative hat KEINEN Multiplikator
-  friendshipMax: 10,        // Anzahl Freundschafts-Kästchen
+  accEvaStart: 10,          // ab diesem Level …
+  accEvaEvery: 5,           // … alle X Level einen Punkt für Accuracy ODER Evasion
 };
 
 // ---------------------------------------------------------------- Würfelklasse
@@ -194,8 +195,26 @@ export function levelUp(pk, info, settings, { free = false } = {}) {
     rolls,
     snapshot,
   };
+  // Ab Lv 10 alle 5 Level: ein Punkt für Accuracy oder Evasion (Vergabe per Dialog, siehe assignBonusPoint)
+  if (isBonusLevel(pk.level, settings)) entry.bonusLevel = pk.level;
   pk.levelLog.push(entry);
   return entry;
+}
+
+// ---------------------------------------------------------------- Accuracy/Evasion-Punkte
+
+export const isBonusLevel = (level, settings = DEFAULT_SETTINGS) =>
+  level >= settings.accEvaStart && (level - settings.accEvaStart) % settings.accEvaEvery === 0;
+
+/** Levelups, deren Accuracy/Evasion-Punkt noch nicht vergeben wurde. */
+export const pendingBonusPoints = (pk) => pk.levelLog.filter((e) => e.bonusLevel && !e.bonusPoint);
+
+/** Vergibt den Punkt eines Levelups an 'accuracy' oder 'evasion' (wird beim Rückgängigmachen mit zurückgenommen). */
+export function assignBonusPoint(pk, entry, stat) {
+  if (!entry.bonusLevel || entry.bonusPoint || !['accuracy', 'evasion'].includes(stat)) return false;
+  entry.bonusPoint = stat;
+  pk[stat] = (pk[stat] ?? 0) + 1;
+  return true;
 }
 
 /** Macht den letzten Protokolleintrag (Levelup oder Entwicklung) exakt rückgängig. */
@@ -203,6 +222,7 @@ export function undoLevelUp(pk) {
   const entry = pk.levelLog.pop();
   if (!entry) return null;
   Object.assign(pk, structuredClone(entry.snapshot));
+  if (entry.bonusPoint) pk[entry.bonusPoint] -= 1; // vergebenen Accuracy/Evasion-Punkt zurücknehmen
   return entry;
 }
 
@@ -227,20 +247,26 @@ export function mapAbilities(current, fromInfo, toInfo) {
 }
 
 /**
- * Entwickelt ein Pokémon. Level, EXP, Statuswerte, Attacken, Spitzname und Freundschaft bleiben.
+ * Entwickelt ein Pokémon. Level, EXP, Statuswerte, Attacken und Spitzname bleiben.
  * Bonus: jeder Statuswert bekommt evolutionRollCount(level) Würfe der NEUEN Würfelklasse (KP ×3).
- * @param {{abilities: 'replace'|'keep', types: 'new'|'keep'}} choice  Auswahl im Entwicklungs-Dialog
+ * @param {object} choice  Auswahl im Entwicklungs-Dialog
+ *   abilities:  'replace' | 'keep' | [slugs]  (Liste = genau diese Fähigkeiten, in dieser Reihenfolge)
+ *   customForm: null = Typen der neuen Art, sonst { types: [...], formName } → Custom-Form (schaltet 🔓 frei)
+ *   dice:       undefined = Würfelklasse unverändert, null = Auto (neue Art), z.B. '2W8' = feste Klasse
+ *   unlock:     true = 🔓 für dieses Pokémon aktivieren (untypische Auswahl im Dialog)
  */
-export function evolve(pk, fromInfo, toInfo, settings, { abilities = 'replace', types = 'new' } = {}) {
+export function evolve(pk, fromInfo, toInfo, settings, { abilities = 'replace', customForm = null, dice, unlock = false } = {}) {
   const snapshot = structuredClone({
-    speciesId: pk.speciesId, types: pk.types, formName: pk.formName,
-    abilities: pk.abilities, stats: pk.stats, currentHp: pk.currentHp,
+    speciesId: pk.speciesId, types: pk.types, formName: pk.formName, unlocked: pk.unlocked,
+    abilities: pk.abilities, stats: pk.stats, currentHp: pk.currentHp, levelUp: pk.levelUp,
   });
-  const dice = pk.levelUp.diceOverride || diceClassFor(toInfo, settings).dice;
+  // Würfelklasse gilt für den Bonus UND künftige Levelups (wie die Auswahl im Bogen)
+  if (dice !== undefined) pk.levelUp.diceOverride = dice;
+  const usedDice = pk.levelUp.diceOverride || diceClassFor(toInfo, settings).dice;
   const count = evolutionRollCount(pk.level);
 
   const rolls = STATS.map((stat) => {
-    const dieRolls = Array.from({ length: count }, () => roll(dice, { rerollOnes: settings.rerollOnes }));
+    const dieRolls = Array.from({ length: count }, () => roll(usedDice, { rerollOnes: settings.rerollOnes }));
     const total = dieRolls.reduce((sum, r) => sum + r.total, 0);
     const mult = multiplierFor(stat, settings);
     const before = pk.stats[stat];
@@ -250,11 +276,17 @@ export function evolve(pk, fromInfo, toInfo, settings, { abilities = 'replace', 
   pk.currentHp += pk.stats.hp - snapshot.stats.hp; // KP-Zuwachs kommt auch den aktuellen KP zugute
 
   pk.speciesId = toInfo.id;
-  if (types === 'new') {
+  if (customForm) {
+    pk.types = [...new Set(customForm.types.filter(Boolean))].slice(0, MAX_TYPES);
+    pk.formName = customForm.formName || '';
+  } else {
     pk.types = [...toInfo.types];
     pk.formName = '';
   }
-  if (abilities === 'replace') pk.abilities = mapAbilities(pk.abilities, fromInfo, toInfo);
+  if (Array.isArray(abilities)) pk.abilities = abilities.slice(0, MAX_ABILITIES);
+  else if (abilities === 'replace') pk.abilities = mapAbilities(pk.abilities, fromInfo, toInfo).slice(0, MAX_ABILITIES);
+  // Eigene Typen, artfremde Fähigkeiten oder feste Würfelklasse sind Ausnahmen → ab jetzt freigeschaltet
+  if (customForm || unlock) pk.unlocked = true;
 
   const entry = {
     type: 'evolution',
@@ -263,10 +295,10 @@ export function evolve(pk, fromInfo, toInfo, settings, { abilities = 'replace', 
     to: pk.level,
     fromSpecies: fromInfo.de,
     toSpecies: toInfo.de,
-    dice,
+    dice: usedDice,
     count,
     rerollOnes: settings.rerollOnes,
-    choice: { abilities, types },
+    choice: { abilities, customForm, dice },
     rolls,
     snapshot,
   };

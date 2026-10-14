@@ -11,7 +11,7 @@
 </head>
 <body>
   <h1>Tests</h1>
-  <p>Öffnen über den lokalen Server: <code>http://localhost:8000/tests/</code>. Die Tests nutzen einen eigenen Speicherbereich nicht – sie legen Test-Pokémon an und löschen sie wieder.</p>
+  <p>Öffnen über den lokalen Server (<code>python tools/serve.py</code>): <code>http://localhost:8000/tests/</code>. Die Tests legen Test-Pokémon an und löschen sie danach wieder.</p>
   <ul id="out"></ul>
   <p id="summary"></p>
   <div id="sandbox"></div>
@@ -19,7 +19,7 @@
     import { rollDie, roll, formatRoll, parseDice } from '../js/core/dice.js';
     import {
       DEFAULT_SETTINGS, diceClassFor, levelUp, undoLevelUp, expForNextLevel, possibleLevelUps, battleValue, heal,
-      evolve, evolutionRollCount, mapAbilities,
+      evolve, evolutionRollCount, mapAbilities, pendingBonusPoints, assignBonusPoint, isBonusLevel,
     } from '../js/core/rules.js';
     import { getSpecies, getMoves } from '../js/core/data.js';
     import { describeMoveEffects } from '../js/core/effects.js';
@@ -56,6 +56,7 @@
     await test('Schwächen: Kaumalat (Drache/Boden) ×4 gegen Eis, immun gegen Elektro', () => {
       const m = defensiveMatchups(['dragon', 'ground']);
       eq(m.ice, 4); eq(m.electric, 0); eq(m.fire, 0.5);
+      eq(defensiveMatchups(['grass', 'bug', 'steel']).fire, 8, 'drei Typen');
     });
 
     // ---------------- Würfelklassen
@@ -110,6 +111,21 @@
       eq(pk.battle.mods.attack, 0); eq(pk.stats, statsBefore, 'Statuswerte unverändert');
     });
 
+    // ---------------- Accuracy/Evasion-Punkte ab Lv 10 alle 5 Level
+    await test('Accuracy/Evasion-Punkt bei Lv 10, 15, 20 …', async () => {
+      ok(isBonusLevel(10) && isBonusLevel(15) && isBonusLevel(20) && !isBonusLevel(11) && !isBonusLevel(5), 'Meilensteine');
+      const info = await getSpecies(318);
+      const pk = createPokemon(info, DEFAULT_SETTINGS, { level: 9 });
+      const eva = pk.evasion;
+      const e = levelUp(pk, info, DEFAULT_SETTINGS, { free: true });
+      eq(e.bonusLevel, 10); eq(pendingBonusPoints(pk).length, 1);
+      ok(assignBonusPoint(pk, e, 'evasion')); eq(pk.evasion, eva + 1); eq(pendingBonusPoints(pk).length, 0);
+      ok(!assignBonusPoint(pk, e, 'accuracy'), 'nur einmal vergebbar');
+      eq(levelUp(pk, info, DEFAULT_SETTINGS, { free: true }).bonusLevel, undefined, 'Lv 11 ohne Punkt');
+      undoLevelUp(pk); undoLevelUp(pk);
+      eq(pk.evasion, eva, 'Rückgängig nimmt Punkt zurück'); eq(pk.level, 9);
+    });
+
     // ---------------- Entwicklung
     await test('Entwicklungsdaten: Nachfolger mit Bedingung', async () => {
       const next = (await getSpecies(318)).evo.next;
@@ -129,14 +145,28 @@
       const pk = createPokemon(from, DEFAULT_SETTINGS, { level: 23 });
       pk.types = ['fire']; // Custom-Typ
       const before = structuredClone(pk);
-      const e = evolve(pk, from, to, DEFAULT_SETTINGS, { abilities: 'replace', types: 'keep' });
-      eq(pk.speciesId, 319); eq(pk.types, ['fire'], 'Custom-Typ behalten'); eq(pk.level, 23);
+      const e = evolve(pk, from, to, DEFAULT_SETTINGS, { abilities: 'replace', customForm: { types: ['fire', 'dark', 'fire', 'ice'], formName: 'Lava' } });
+      eq(pk.speciesId, 319); eq(pk.types, ['fire', 'dark', 'ice'], 'Custom-Form, max. 3 Typen ohne Doppelte');
+      eq(pk.formName, 'Lava'); eq(pk.unlocked, true, 'Custom-Form schaltet frei'); eq(pk.level, 23);
       eq(e.count, evolutionRollCount(23)); eq(e.count, 3);
       ok(e.rolls.every((r) => r.rolls.length === 3 && r.after === r.before + r.gain), 'Würfe/Summen');
       eq(e.rolls.find((r) => r.stat === 'hp').mult, 3, 'KP ×3');
       ok(e.rolls.every((r) => r.rolls.every((x) => x.dice.every((d) => d.value >= 2))), '1 im Ergebnis');
       undoLevelUp(pk);
       eq(pk.speciesId, 318); eq(pk.stats, before.stats); eq(pk.types, ['fire']); eq(pk.levelLog, []);
+      eq(pk.unlocked, false, 'Rückgängig sperrt wieder'); eq(pk.formName, '');
+      // ohne Custom-Form: Typen der neuen Art
+      evolve(pk, from, to, DEFAULT_SETTINGS);
+      eq(pk.types, to.types);
+      undoLevelUp(pk);
+      // Würfelklasse + Fähigkeiten-Liste aus dem Dialog
+      const e2 = evolve(pk, from, to, DEFAULT_SETTINGS, { abilities: ['speed-boost', 'swift-swim'], dice: '2W8', unlock: true });
+      eq(e2.dice, '2W8'); eq(pk.levelUp.diceOverride, '2W8', 'gilt auch künftig');
+      eq(pk.abilities, ['speed-boost', 'swift-swim']); eq(pk.unlocked, true);
+      undoLevelUp(pk);
+      eq(pk.levelUp.diceOverride, null); eq(pk.unlocked, false);
+      evolve(pk, from, to, DEFAULT_SETTINGS, { abilities: ['rough-skin', 'speed-boost', 'swift-swim', 'torrent'] });
+      eq(pk.abilities.length, 3, 'max. 3 Fähigkeiten');
     });
 
     // ---------------- Sperre für untypische Änderungen
@@ -157,7 +187,6 @@
       const hai = m.pokemon.find((p) => p.nickname === 'Haipirinha');
       eq(hai.speciesId, 318); eq(hai.level, 21); eq(hai.moves, ['ice-fang', 'poison-fang', 'bite', 'aqua-jet']);
       eq(hai.abilities, ['rough-skin', 'swift-swim', 'speed-boost']);
-      eq(typeof hai.friendship, 'number');
     });
 
     // ---------------- Views rendern ohne Fehler
@@ -170,6 +199,9 @@
       try {
         await (await import('../js/views/pokemon.js')).render(sandbox, pk.uuid);
         ok(sandbox.querySelectorAll('.trait-val').length === 6, 'Statuswerte fehlen');
+        ok(sandbox.querySelector('.pk-traits .lvl-panel [data-act="levelup"]'), 'Level-Bereich über den Statuswerten fehlt');
+        ok(sandbox.querySelector('[data-act="evolve"].evo-btn'), 'Entwickeln-Knopf nicht hervorgehoben');
+        ok(/\(\d+\)/.test(sandbox.querySelector('[data-f="evasion"]').previousElementSibling.textContent), 'Evasion + 10 fehlt');
         ok(sandbox.querySelector('.matchups'), 'Schwächenübersicht fehlt');
         ok(sandbox.querySelector('[data-f="types.0"]').disabled, 'Typ sollte gesperrt sein');
         ok(sandbox.querySelector('[data-f="levelUp.diceOverride"]').disabled, 'Würfelklasse sollte gesperrt sein');
@@ -178,6 +210,7 @@
         sw.checked = true; sw.dispatchEvent(new Event('change', { bubbles: true }));
         await new Promise((r) => setTimeout(r, 50));
         ok(!sandbox.querySelector('[data-f="types.0"]').disabled, 'Typ sollte nach Freischalten änderbar sein');
+        ok(sandbox.querySelector('[data-f="types.2"]'), 'Typ 3 sollte mit 🔓 erscheinen');
         eq(sandbox.querySelector('[data-move="0"]').getAttribute('list'), 'move-dl');
         // Kampfwerte: + ändert nur die Anzeige
         const atk = pk.stats.attack;
@@ -186,9 +219,6 @@
         const saved = (await import('../js/core/store.js')).getPokemon(pk.uuid);
         eq(saved.stats.attack, atk, 'Statuswert darf sich nicht ändern');
         eq(saved.battle.mods.attack, 1);
-        // Freundschaft
-        sandbox.querySelector('[data-track="friendship"][data-i="2"]').click();
-        eq((await import('../js/core/store.js')).getPokemon(pk.uuid).friendship, 3);
         // Heilen
         sandbox.querySelector('[data-act="heal"]').click();
         eq((await import('../js/core/store.js')).getPokemon(pk.uuid).battle.mods.attack, 0);
@@ -209,7 +239,9 @@
         await new Promise((r) => setTimeout(r, 300));
         const dlg = sandbox.querySelector('#evo-dlg');
         ok(dlg.open, 'Dialog nicht geöffnet');
-        ok(dlg.querySelector('select[name="abilities"]'), 'Fähigkeiten-Auswahl fehlt');
+        ok(dlg.querySelectorAll('input[name="ability"]').length >= 2, 'Fähigkeiten-Auswahl fehlt');
+        ok(dlg.querySelector('.ab-tag'), 'Markierungen fehlen');
+        ok(dlg.querySelector('select[name="dice"]'), 'Würfelklassen-Auswahl fehlt');
         dlg.querySelector('button[value="ok"]').click(); // wie ein echter Klick auf „Entwickeln“
         await new Promise((r) => setTimeout(r, 300));
         const evolved = (await import('../js/core/store.js')).getPokemon(pk.uuid);
@@ -217,6 +249,12 @@
         ok(sandbox.querySelector('.log-evo'), 'Entwicklung fehlt im Protokoll');
         await (await import('../js/views/trainer.js')).render(sandbox, t.id);
         ok(sandbox.querySelector('.team-row'), 'Team fehlt');
+        // Mehrere Class Features mit Name + Effekt
+        sandbox.querySelector('[data-act="add-cf"]').click();
+        eq(sandbox.querySelectorAll('.cf-item').length, 2, 'zweites Class Feature');
+        ok(sandbox.querySelector('.cf-item textarea.cf-effect') && sandbox.querySelector('.cf-item input.cf-name'), 'Name/Effekt-Felder');
+        const { normalizeTrainer } = await import('../js/core/model.js');
+        eq(normalizeTrainer({ classFeature: 'Alt' }).classFeatures, [{ name: '', effect: 'Alt' }], 'alter Text übernommen');
         await (await import('../js/views/home.js')).render(sandbox);
         await (await import('../js/views/settings.js')).render(sandbox);
         await (await import('../js/views/homebrew.js')).render(sandbox);

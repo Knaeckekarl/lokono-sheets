@@ -86,7 +86,7 @@ export function bindFields(root, getModel, { save, rerender }) {
 export const dhBanner = (title) => `<h3 class="dh-banner">${title}</h3>`;
 
 /**
- * Kästchen-Leiste (HP, Stress, Hope, Freundschaft …). Klick-Logik: siehe clickTrack().
+ * Kästchen-Leiste (HP, Stress, Hope …). Klick-Logik: siehe clickTrack().
  * @param {string} key  wird als data-track ausgegeben
  */
 export const boxTrack = (key, max, marked, cls = 'box') =>

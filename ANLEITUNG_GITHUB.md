@@ -25,7 +25,7 @@ Die Seite muss über einen kleinen lokalen Webserver laufen. Per Doppelklick auf
 
 ```bash
 cd C:\Projects\Pokemonsheets
-python -m http.server 8000
+python tools/serve.py
 ```
 
 Dann im Browser öffnen:
@@ -34,7 +34,8 @@ Dann im Browser öffnen:
 - Tests: <http://localhost:8000/tests/> (sollte „… bestanden, 0 fehlgeschlagen“ zeigen)
 
 Server beenden: `Strg+C` im Terminal.
-Wenn du Code geändert hast und der Browser noch die alte Version zeigt, hilft `Strg+F5`.
+`tools/serve.py` verbietet dem Browser das Zwischenspeichern, Änderungen sind also nach dem Neuladen sofort sichtbar.
+(Mit `python -m http.server` würde der Browser alte JS/CSS-Dateien weiterverwenden. Falls doch einmal alles alt aussieht: `Strg+F5`.)
 
 > **Wichtig:** Bögen werden im Browser gespeichert (localStorage), und zwar **pro Adresse**.
 > Was du unter `localhost:8000` anlegst, ist später unter `github.io` **nicht** zu sehen.
@@ -141,7 +142,7 @@ Ohne `--refresh` wird nur aus dem Cache neu gebaut, das dauert Sekunden.
 |---|---|
 | `https://<NAME>.github.io/lokono-sheets/` zeigt 404 | 2 Minuten warten; unter Settings → Pages prüfen, ob `main` / `root` gewählt ist |
 | Seite lädt, aber „Fehler … data/…: HTTP 404“ | Ordner `data/` wurde nicht gepusht → `git add data` + commit + push |
-| Nach einem Update ist alles noch alt | `Strg+F5` (Browser-Cache) |
+| Nach einem Update ist alles noch alt | `Strg+F5` (Browser-Cache). Lokal immer `python tools/serve.py` statt `python -m http.server` nutzen |
 | Meine Bögen sind weg | Daten liegen pro Browser und pro Adresse. Am alten Ort exportieren, am neuen importieren |
 | `git push` wird abgelehnt („fetch first“) | Erst `git pull`, dann erneut `git push` |
 | Token-Veröffentlichung: „GitHub: 404“ | Repo-Name falsch geschrieben oder Token hat keinen Zugriff auf dieses Repo |

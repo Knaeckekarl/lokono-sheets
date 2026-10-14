@@ -39,7 +39,6 @@ async function fromOldPokemon(o) {
     item: o.textFields?.item || '',
     gender: o.gender || 'neutral',
     shiny: !!o.isShiny,
-    friendship: Array.isArray(o.tallyMarks) ? o.tallyMarks.length : 0,
     // tempStatModifiers waren temporäre Absolutwerte → werden nicht übernommen
     status: Array.isArray(o.statusEffects) ? o.statusEffects.map(String) : [],
     notes,

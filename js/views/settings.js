@@ -48,10 +48,9 @@ export async function render(app) {
           <label>KP-Multiplikator <input type="number" name="hpMultiplier" min="1" value="${s.hpMultiplier}"></label>
           <label>Initiative-Multiplikator <input type="number" name="speedMultiplier" min="1" value="${s.speedMultiplier}"></label>
         </div>
-
-        <h3>Pokémon-Bogen</h3>
         <div class="row wrap">
-          <label>Freundschaft maximal <input type="number" name="friendshipMax" min="1" max="30" value="${s.friendshipMax}"></label>
+          <label>Accuracy/Evasion-Punkt ab Level <input type="number" name="accEvaStart" min="1" value="${s.accEvaStart}"></label>
+          <label>dann alle <input type="number" name="accEvaEvery" min="1" value="${s.accEvaEvery}"> Level</label>
         </div>
 
         <div class="row wrap">
@@ -89,7 +88,8 @@ export async function render(app) {
       rerollOnes: f.has('rerollOnes'),
       hpMultiplier: +f.get('hpMultiplier') || 1,
       speedMultiplier: +f.get('speedMultiplier') || 1,
-      friendshipMax: Math.min(30, Math.max(1, +f.get('friendshipMax') || 10)),
+      accEvaStart: Math.max(1, +f.get('accEvaStart') || 10),
+      accEvaEvery: Math.max(1, +f.get('accEvaEvery') || 5),
     };
   };
 
