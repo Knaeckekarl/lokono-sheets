@@ -30,11 +30,14 @@ export function setPath(obj, path, value) {
   target[last] = value;
 }
 
-export function downloadJson(filename, data) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+export function downloadBlob(filename, blob) {
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: filename });
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+export function downloadJson(filename, data) {
+  downloadBlob(filename, new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
 }
 
 /** Dateiname ohne Sonderzeichen, z.B. "Pokemon_Haipirinha_Lv21_2026-10-13.json" */

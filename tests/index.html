@@ -189,6 +189,18 @@
       eq(hai.abilities, ['rough-skin', 'swift-swim', 'speed-boost']);
     });
 
+    // ---------------- ZIP-Backup
+    await test('ZIP: CRC32 und Aufbau', async () => {
+      const { createZip, crc32 } = await import('../js/core/zip.js');
+      eq(crc32(new TextEncoder().encode('123456789')).toString(16), 'cbf43926');
+      const v = new DataView(await createZip([{ name: 'Pokemon/Ä.json', content: '{}' }, { name: 'b.json', content: 'x' }]).arrayBuffer());
+      eq(v.getUint32(0, true), 0x04034b50, 'Local Header');
+      const end = v.byteLength - 22;
+      eq(v.getUint32(end, true), 0x06054b50, 'Endsatz');
+      eq(v.getUint16(end + 10, true), 2, 'Anzahl Dateien');
+      eq(v.getUint32(v.getUint32(end + 16, true), true), 0x02014b50, 'Central Directory');
+    });
+
     // ---------------- Views rendern ohne Fehler
     await test('Pokémon- und Trainer-Bogen rendern', async () => {
       const sandbox = document.getElementById('sandbox');

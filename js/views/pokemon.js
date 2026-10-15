@@ -123,34 +123,6 @@ export async function render(app, uuid) {
           </div>
         </div>
         <div class="pk-traits-main">
-          <div class="lvl-panel">
-            <span class="banner">LEVEL &amp; ERFAHRUNG</span>
-            <div class="row wrap">
-              <label>EXP <input type="number" min="0" data-f="exp" data-t="num" data-rerender value="${pk.exp}"></label>
-              <span class="muted">nächstes Level: ${need}</span>
-              <label title="${esc(dc.steps.join('\n'))}">Würfel
-                <select data-f="levelUp.diceOverride" data-t="nullable" data-rerender ${lock}>
-                  <option value="">Auto (${dc.dice})</option>
-                  ${settings.diceLadder.map((d) => `<option ${d === pk.levelUp.diceOverride ? 'selected' : ''}>${d}</option>`).join('')}
-                </select>
-              </label>
-              <details class="dc-why"><summary>Warum ${dc.dice}?</summary><ul>${dc.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></details>
-              <label>Primär <select data-f="levelUp.primary" data-rerender>${statOptions(pk.levelUp.primary)}</select></label>
-              <label>Sekundär <select data-f="levelUp.secondary" data-rerender>${statOptions(pk.levelUp.secondary, pk.levelUp.primary)}</select></label>
-            </div>
-            <div class="row wrap no-print">
-              ${possible > 1 ? `
-                <select id="lvl-qty" aria-label="Anzahl Levelups">${Array.from({ length: possible }, (_, i) =>
-                  `<option value="${i + 1}" ${i + 1 === possible ? 'selected' : ''}>${i + 1}</option>`).join('')}</select>` : ''}
-              <button data-act="levelup" class="primary" ${possible ? '' : 'disabled'}>⬆ ${possible > 1 ? 'Levelups' : 'Levelup'}</button>
-              <button data-act="levelup-free" ${pk.level < 100 ? '' : 'disabled'} title="Level ohne EXP-Kosten, z.B. vom Spielleiter">+1 Level ohne EXP</button>
-              <button data-act="undo" ${pk.levelLog.length ? '' : 'disabled'} title="Letztes Levelup bzw. letzte Entwicklung rückgängig machen">↶ Rückgängig</button>
-              ${info.evo?.next?.length ? `<button data-act="evolve" class="evo-btn ${evoReady ? 'ready' : ''}"
-                title="${evoReady ? 'Level-Bedingung für eine Entwicklung erfüllt' : 'Entwicklung auswählen'}">✨ Entwickeln</button>` : ''}
-              ${pending.length ? `<button data-act="points" class="pt-open" title="Ab Lv ${settings.accEvaStart} alle ${settings.accEvaEvery} Level: +1 Accuracy oder Evasion">🎯 ${pending.length} Punkt${pending.length > 1 ? 'e' : ''} für Accuracy/Evasion offen</button>` : ''}
-            </div>
-            <p class="muted small">${possible ? `${possible} Levelup${possible > 1 ? 's' : ''} möglich · ` : ''}Würfel ${effectiveDice(pk, info, settings)} · ${settings.rerollOnes ? '1en werden neu gewürfelt' : '1en zählen'} · KP ×${settings.hpMultiplier} · Initiative ×${settings.speedMultiplier}</p>
-          </div>
           <div class="stat-row">
             ${STATS.map((s) => `
               <label class="trait">
@@ -159,6 +131,34 @@ export async function render(app, uuid) {
                 <small>Basis ${info.base[s]}</small>
               </label>`).join('')}
           </div>
+        </div>
+        <div class="lvl-panel">
+          <span class="banner">LEVEL &amp; ERFAHRUNG</span>
+          <div class="row wrap">
+            <label>EXP <input type="number" min="0" data-f="exp" data-t="num" data-rerender value="${pk.exp}"></label>
+            <span class="muted">nächstes Level: ${need}</span>
+            <label title="${esc(dc.steps.join('\n'))}">Würfel
+              <select data-f="levelUp.diceOverride" data-t="nullable" data-rerender ${lock}>
+                <option value="">Auto (${dc.dice})</option>
+                ${settings.diceLadder.map((d) => `<option ${d === pk.levelUp.diceOverride ? 'selected' : ''}>${d}</option>`).join('')}
+              </select>
+            </label>
+            <details class="dc-why"><summary>Warum ${dc.dice}?</summary><ul>${dc.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></details>
+            <label>Primär <select data-f="levelUp.primary" data-rerender>${statOptions(pk.levelUp.primary)}</select></label>
+            <label>Sekundär <select data-f="levelUp.secondary" data-rerender>${statOptions(pk.levelUp.secondary, pk.levelUp.primary)}</select></label>
+          </div>
+          <div class="row wrap no-print">
+            ${possible > 1 ? `
+              <select id="lvl-qty" aria-label="Anzahl Levelups">${Array.from({ length: possible }, (_, i) =>
+                `<option value="${i + 1}" ${i + 1 === possible ? 'selected' : ''}>${i + 1}</option>`).join('')}</select>` : ''}
+            <button data-act="levelup" class="primary" ${possible ? '' : 'disabled'}>⬆ ${possible > 1 ? 'Levelups' : 'Levelup'}</button>
+            <button data-act="levelup-free" ${pk.level < 100 ? '' : 'disabled'} title="Level ohne EXP-Kosten, z.B. vom Spielleiter">+1 Level ohne EXP</button>
+            <button data-act="undo" ${pk.levelLog.length ? '' : 'disabled'} title="Letztes Levelup bzw. letzte Entwicklung rückgängig machen">↶ Rückgängig</button>
+            ${info.evo?.next?.length ? `<button data-act="evolve" class="evo-btn ${evoReady ? 'ready' : ''}"
+              title="${evoReady ? 'Level-Bedingung für eine Entwicklung erfüllt' : 'Entwicklung auswählen'}">✨ Entwickeln</button>` : ''}
+            ${pending.length ? `<button data-act="points" class="pt-open" title="Ab Lv ${settings.accEvaStart} alle ${settings.accEvaEvery} Level: +1 Accuracy oder Evasion">🎯 ${pending.length} Punkt${pending.length > 1 ? 'e' : ''} für Accuracy/Evasion offen</button>` : ''}
+          </div>
+          <p class="muted small">${possible ? `${possible} Levelup${possible > 1 ? 's' : ''} möglich · ` : ''}Würfel ${effectiveDice(pk, info, settings)} · ${settings.rerollOnes ? '1en werden neu gewürfelt' : '1en zählen'} · KP ×${settings.hpMultiplier} · Initiative ×${settings.speedMultiplier}</p>
         </div>
       </div>
 

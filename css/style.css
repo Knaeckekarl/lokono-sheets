@@ -296,20 +296,21 @@ label { display: inline-flex; align-items: center; gap: 6px; }
 .ab-tag.new { color: var(--up); }
 .ab-tag.custom { color: var(--warn); }
 
-/* Werte-Block Pokémon: Accuracy/Evasion links, Level & Entwicklung über den Statuswerten */
-.pk-traits { align-items: flex-end; flex-wrap: nowrap; }
+/* Werte-Block Pokémon: Accuracy/Evasion links neben den Statuswerten, Level & Erfahrung darunter in voller Breite */
+.pk-traits { align-items: flex-end; flex-wrap: wrap; }
 .acc-eva { display: flex; flex-direction: column; gap: 8px; align-items: center; flex: none; }
 .acc-eva-shields { display: flex; gap: 10px; }
 .shield-extra { font-size: .8rem; font-weight: 700; color: var(--muted); line-height: 1; margin-top: 6px; }
 .pt-open { border: 1px dashed var(--hope-on); background: color-mix(in srgb, var(--hope-on) 15%, var(--btn)); }
 .pt-row { align-items: center; margin: 6px 0; }
-.pk-traits-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.pk-traits-main { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.pk-traits > .lvl-panel { flex: 1 1 100%; }
 .lvl-panel { border: 1px solid var(--dh-soft); border-radius: 8px; padding: 0 10px 2px; }
 .lvl-panel .banner { display: inline-block; margin-top: -1px; background: var(--dh-dark); color: var(--dh-dark-ink); font-weight: 700; font-size: .75rem; padding: 2px 8px; border-radius: 0 0 4px 4px; }
 .lvl-panel .row { margin: 6px 0; }
 .lvl-panel p { margin: 2px 0 6px; }
 .stat-row { display: flex; flex-wrap: wrap; gap: 10px; }
-@media (max-width: 900px) { .pk-traits { flex-wrap: wrap; } }
+@media (max-width: 900px) { .pk-traits-main { flex-basis: 100%; } }
 
 /* Entwickeln-Knopf hervorheben; leuchtet, wenn eine Level-Bedingung erfüllt ist */
 .evo-btn { background: linear-gradient(135deg, #8a5cf6, #e3350d); color: #fff; border-color: transparent; font-weight: 600; }

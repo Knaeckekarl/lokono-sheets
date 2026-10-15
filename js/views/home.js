@@ -1,7 +1,8 @@
 // Übersicht: Trainer & Pokémon, Neu anlegen, Import/Export.
 
-import { esc, downloadJson, readJsonFiles, today } from '../core/util.js';
-import { listPokemon, listTrainers, saveTrainer, mergeImport, exportAll, teamOf } from '../core/store.js';
+import { esc, downloadJson, downloadBlob, readJsonFiles, today, safeName } from '../core/util.js';
+import { listPokemon, listTrainers, saveTrainer, mergeImport, exportAll, bundle, teamOf } from '../core/store.js';
+import { createZip } from '../core/zip.js';
 import { createTrainer } from '../core/model.js';
 import { migrate } from '../core/migrate.js';
 import {
@@ -69,6 +70,7 @@ export async function render(app) {
         <label class="button">Dateien importieren<input type="file" id="import-files" accept=".json" multiple hidden></label>
         <label class="button">Ordner importieren<input type="file" id="import-dir" webkitdirectory multiple hidden></label>
         <button data-act="export-all">Komplett-Backup exportieren</button>
+        <button data-act="export-zip" title="ZIP mit je einer Datei pro Trainer und Pokémon – entpacken und per „Ordner importieren“ wieder einlesen">Backup als Einzeldateien (ZIP)</button>
       </div>
       <pre id="import-log" class="log-box" hidden></pre>
     </section>`;
@@ -97,6 +99,7 @@ export async function render(app) {
       location.hash = `#/trainer/${t.id}`;
     }
     if (act === 'export-all') downloadJson(`Lokono_Backup_${today()}.json`, exportAll());
+    if (act === 'export-zip') downloadBlob(`Lokono_Backup_${today()}.zip`, createZip(backupFiles(dex)));
   });
 
   const doImport = async (e) => {
@@ -123,4 +126,22 @@ export async function render(app) {
   };
   root.querySelector('#import-files').addEventListener('change', doImport);
   root.querySelector('#import-dir').addEventListener('change', doImport);
+}
+
+/** Komplett-Backup als Einzeldateien: je Trainer (ohne Team) und je Pokémon eine Datei im Exportformat. */
+function backupFiles(dex) {
+  const used = new Set();
+  const unique = (name) => {
+    let n = name, i = 2;
+    while (used.has(n.toLowerCase())) n = `${name}_${i++}`;
+    used.add(n.toLowerCase());
+    return n;
+  };
+  const file = (path, data) => ({ name: `${unique(path)}.json`, content: JSON.stringify(data, null, 2) });
+  return [
+    ...listTrainers().map((t) => file(`Trainer/Trainer_${safeName(t.name || 'Unbenannt')}`, bundle({ trainers: [t] }))),
+    ...listPokemon().map((pk) => file(
+      `Pokemon/Pokemon_${safeName(pk.nickname || dex.get(pk.speciesId)?.de || pk.speciesId)}_Lv${pk.level}`,
+      bundle({ pokemon: [pk] }))),
+  ];
 }
