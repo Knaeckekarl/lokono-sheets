@@ -93,6 +93,7 @@ const trainerDefaults = () => ({
   pronouns: '',
   class: '',
   boon: '',
+  portrait: '',          // Bild als data:-URL (verkleinert), reist mit Export/Backup mit
   level: 1,
   evasion: 10,
   capacity: 0,

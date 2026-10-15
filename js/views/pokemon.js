@@ -70,12 +70,11 @@ export async function render(app, uuid) {
 
     sheet.style.setProperty('--accent', `var(--t-${pk.types[0] || 'normal'})`);
     sheet.innerHTML = `
-      <div class="sheet-toolbar no-print">
+      <div class="sheet-toolbar">
         ${pk.trainerId ? `<a class="button" href="#/trainer/${encodeURIComponent(pk.trainerId)}">→ Trainer</a>` : ''}
         <span class="grow"></span>
         <button data-act="export" title="Als JSON-Datei speichern">Export</button>
         <button data-act="duplicate">Duplizieren</button>
-        <button data-act="print">Drucken</button>
         <button data-act="delete" class="danger">Löschen</button>
       </div>
       <header class="dh-head">
@@ -98,10 +97,11 @@ export async function render(app, uuid) {
 
       <div class="dh-subhead">
         ${twin ? `<span class="warn">⚠ Ein anderes ${esc(info.de)} heißt ebenfalls „${esc(pk.nickname)}“.</span>` : ''}
-        <label>Typ <select data-f="types.0" data-rerender ${lock}>${typeOptions(pk.types[0])}</select></label>
-        <select data-f="types.1" data-rerender ${lock} aria-label="Typ 2">${typeOptions(pk.types[1] || '', true)}</select>
-        ${pk.unlocked || pk.types[2] ? `<select data-f="types.2" data-rerender ${lock} aria-label="Typ 3" title="Dritter Typ – nur als Ausnahme">${typeOptions(pk.types[2] || '', true)}</select>` : ''}
-        <span>${pk.types.map(typeBadge).join('')}</span>
+        ${pk.unlocked ? `
+          <label>Typ <select data-f="types.0" data-rerender>${typeOptions(pk.types[0])}</select></label>
+          <select data-f="types.1" data-rerender aria-label="Typ 2">${typeOptions(pk.types[1] || '', true)}</select>
+          <select data-f="types.2" data-rerender aria-label="Typ 3" title="Dritter Typ – nur als Ausnahme">${typeOptions(pk.types[2] || '', true)}</select>` : ''}
+        <span class="pk-types">${pk.types.map(typeBadge).join('')}</span>
         ${custom && pk.unlocked ? `
           <input data-f="formName" value="${esc(pk.formName)}" placeholder="Name der Form">
           <button data-act="reset-types" title="Original: ${info.types.join('/')}">↺ Original-Typen</button>` : ''}
@@ -109,7 +109,7 @@ export async function render(app, uuid) {
           `<option value="${k}" ${k === pk.gender ? 'selected' : ''} ${pk.unlocked || genders.includes(k) ? '' : 'disabled'}>${s}</option>`).join('')}</select></label>
         <label><input type="checkbox" data-f="shiny" data-rerender ${pk.shiny ? 'checked' : ''}> Shiny</label>
         <span class="muted small">${info.height / 10} m · ${info.weight / 10} kg · BST ${info.bst}</span>
-        <label class="unlock no-print ${pk.unlocked ? 'on' : ''}" title="Erlaubt für DIESES Pokémon: andere Typen, artfremde Fähigkeiten und Attacken, eigene Würfelklasse, jedes Geschlecht">
+        <label class="unlock ${pk.unlocked ? 'on' : ''}" title="Erlaubt für DIESES Pokémon: andere Typen, artfremde Fähigkeiten und Attacken, eigene Würfelklasse, jedes Geschlecht">
           <input type="checkbox" data-f="unlocked" data-rerender ${pk.unlocked ? 'checked' : ''}>
           ${pk.unlocked ? '🔓' : '🔒'} Untypische Änderungen erlauben
         </label>
@@ -147,7 +147,7 @@ export async function render(app, uuid) {
             <label>Primär <select data-f="levelUp.primary" data-rerender>${statOptions(pk.levelUp.primary)}</select></label>
             <label>Sekundär <select data-f="levelUp.secondary" data-rerender>${statOptions(pk.levelUp.secondary, pk.levelUp.primary)}</select></label>
           </div>
-          <div class="row wrap no-print">
+          <div class="row wrap">
             ${possible > 1 ? `
               <select id="lvl-qty" aria-label="Anzahl Levelups">${Array.from({ length: possible }, (_, i) =>
                 `<option value="${i + 1}" ${i + 1 === possible ? 'selected' : ''}>${i + 1}</option>`).join('')}</select>` : ''}
@@ -157,8 +157,8 @@ export async function render(app, uuid) {
             ${info.evo?.next?.length ? `<button data-act="evolve" class="evo-btn ${evoReady ? 'ready' : ''}"
               title="${evoReady ? 'Level-Bedingung für eine Entwicklung erfüllt' : 'Entwicklung auswählen'}">✨ Entwickeln</button>` : ''}
             ${pending.length ? `<button data-act="points" class="pt-open" title="Ab Lv ${settings.accEvaStart} alle ${settings.accEvaEvery} Level: +1 Accuracy oder Evasion">🎯 ${pending.length} Punkt${pending.length > 1 ? 'e' : ''} für Accuracy/Evasion offen</button>` : ''}
+            <span class="muted small">${possible ? `${possible} Levelup${possible > 1 ? 's' : ''} möglich · ` : ''}Würfel ${effectiveDice(pk, info, settings)} · ${settings.rerollOnes ? '1en werden neu gewürfelt' : '1en zählen'} · KP ×${settings.hpMultiplier} · Initiative ×${settings.speedMultiplier}</span>
           </div>
-          <p class="muted small">${possible ? `${possible} Levelup${possible > 1 ? 's' : ''} möglich · ` : ''}Würfel ${effectiveDice(pk, info, settings)} · ${settings.rerollOnes ? '1en werden neu gewürfelt' : '1en zählen'} · KP ×${settings.hpMultiplier} · Initiative ×${settings.speedMultiplier}</p>
         </div>
       </div>
 
@@ -170,7 +170,7 @@ export async function render(app, uuid) {
               <b>KP</b>
               <input type="number" min="0" data-f="currentHp" data-t="num" data-rerender value="${pk.currentHp}" aria-label="KP aktuell">
               <span class="muted">/ ${pk.stats.hp}</span>
-              <button class="heal-btn no-print" data-act="heal" title="KP auffüllen, Kampfwerte zurücksetzen, Statusprobleme entfernen">❤ Heilen</button>
+              <button class="heal-btn" data-act="heal" title="KP auffüllen, Kampfwerte zurücksetzen, Statusprobleme entfernen">❤ Heilen</button>
             </div>
             <div class="hp-bar ${hpPct <= 25 ? 'low' : hpPct <= 50 ? 'mid' : ''}"><span style="width:${hpPct}%"></span></div>
             <div class="row wrap">
@@ -183,7 +183,7 @@ export async function render(app, uuid) {
             <p class="muted small center">Momentaufnahme: + / − verändert um je ${pk.level} (Level). Die Statuswerte oben bleiben unverändert.</p>
             <div class="bt-row bt-head"><span></span><small>Basis</small><small>Aktuell</small></div>
             ${BATTLE_STATS.map((s) => battleRow(pk, s)).join('')}
-            <div class="row no-print"><button data-act="battle-reset">↺ Alle Kampfwerte zurücksetzen</button></div>
+            <div class="row"><button data-act="battle-reset">↺ Alle Kampfwerte zurücksetzen</button></div>
           </section>
 
           <section class="dh-sec">
@@ -205,7 +205,7 @@ export async function render(app, uuid) {
               `${esc(abilities[a]?.n || a)}${a === info.hiddenAbility ? ' (versteckt)' : ''}`).join(', ') || '–'}</p>
             ${pk.abilities.map((a, i) => abilityRow(a, i, abilities, info, pk.unlocked)).join('')}
             ${pk.abilities.length < MAX_ABILITIES
-              ? '<button data-act="add-ability" class="no-print">+ Fähigkeit</button>'
+              ? '<button data-act="add-ability">+ Fähigkeit</button>'
               : `<p class="muted small">Maximal ${MAX_ABILITIES} Fähigkeiten.</p>`}
           </section>
 
@@ -343,10 +343,6 @@ export async function render(app, uuid) {
         Object.assign(copy, { uuid: uid('pk'), nickname: `${pk.nickname || info.de} (Kopie)`, createdAt: new Date().toISOString() });
         save(copy);
         location.hash = `#/pokemon/${copy.uuid}`;
-        return 'navigated';
-      },
-      print() {
-        window.print();
         return 'navigated';
       },
       delete() {
@@ -586,9 +582,9 @@ function battleRow(pk, s) {
       <b>${BATTLE_LABELS[s]}</b>
       ${base}
       <span class="bt-val ${cls}">${noRoll ? '–' : battleValue(pk, s)}</span>
-      <button data-bmod="${s}" data-step="-1" class="no-print" ${noRoll ? 'disabled' : ''} title="− ${pk.level}">−</button>
-      <button data-bmod="${s}" data-step="1" class="no-print" ${noRoll ? 'disabled' : ''} title="+ ${pk.level}">+</button>
-      <button data-breset="${s}" class="no-print" ${mods ? '' : 'disabled'} title="Zurücksetzen">↺</button>
+      <button data-bmod="${s}" data-step="-1" ${noRoll ? 'disabled' : ''} title="− ${pk.level}">−</button>
+      <button data-bmod="${s}" data-step="1" ${noRoll ? 'disabled' : ''} title="+ ${pk.level}">+</button>
+      <button data-breset="${s}" ${mods ? '' : 'disabled'} title="Zurücksetzen">↺</button>
       <span class="bt-note">${note}</span>
     </div>`;
 }
@@ -597,7 +593,7 @@ function battleRow(pk, s) {
 function weaknesses(types) {
   const m = defensiveMatchups(types);
   const groups = [
-    [8, '×8'], [4, '×4'], [2, '×2'], [0.5, '×½'], [0.25, '×¼'], [0.125, '×⅛'], [0, 'immun'],
+    [8, '×8'], [4, '×4'], [2, '×2'], [1, '×1'], [0.5, '×½'], [0.25, '×¼'], [0.125, '×⅛'], [0, 'immun'],
   ].map(([f, label]) => [label, Object.keys(m).filter((t) => m[t] === f)]).filter(([, list]) => list.length);
   return `
     <div class="matchups">${groups.map(([label, list]) => `

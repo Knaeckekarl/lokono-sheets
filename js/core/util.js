@@ -40,6 +40,21 @@ export function downloadJson(filename, data) {
   downloadBlob(filename, new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
 }
 
+/** Zielgröße mit gleichem Seitenverhältnis, längste Kante höchstens `max` (nie vergrößern). */
+export function fitSize(width, height, max) {
+  const scale = Math.min(1, max / Math.max(width, height));
+  return { width: Math.round(width * scale), height: Math.round(height * scale) };
+}
+
+/** Bilddatei auf max. `max` px Kantenlänge verkleinern → data:-URL (WebP, sonst PNG-Fallback des Browsers). */
+export async function shrinkImage(file, max = 256) {
+  const bmp = await createImageBitmap(file);
+  const canvas = Object.assign(document.createElement('canvas'), fitSize(bmp.width, bmp.height, max));
+  canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  bmp.close();
+  return canvas.toDataURL('image/webp', 0.85);
+}
+
 /** Dateiname ohne Sonderzeichen, z.B. "Pokemon_Haipirinha_Lv21_2026-10-13.json" */
 export const safeName = (s) => String(s).replace(/[^\p{L}\p{N}_-]+/gu, '_');
 

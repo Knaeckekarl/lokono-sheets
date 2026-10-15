@@ -25,10 +25,13 @@ export async function render(app) {
         || (a.pk.nickname || a.sp?.de || '').localeCompare(b.pk.nickname || b.sp?.de || ''));
 
     root.querySelector('#trainer-list').innerHTML = trainers.map((t) => `
-      <a class="tile" href="#/trainer/${encodeURIComponent(t.id)}">
-        <strong>${esc(t.name || 'Unbenannt')}</strong>
-        <span class="muted">${esc(t.class)} · Level ${t.level}</span>
-        <span class="team-strip">${teamOf(t).map(({ pk }) => spriteImg(pk.speciesId, { shiny: pk.shiny, size: 40 })).join('')}</span>
+      <a class="tile tr-tile" href="#/trainer/${encodeURIComponent(t.id)}">
+        ${t.portrait ? `<img class="tr-portrait" src="${esc(t.portrait)}" alt="">` : ''}
+        <span>
+          <strong>${esc(t.name || 'Unbenannt')}</strong>
+          <span class="muted">${esc(t.class)} · Level ${t.level}</span>
+          <span class="team-strip">${teamOf(t).map(({ pk }) => spriteImg(pk.speciesId, { shiny: pk.shiny, size: 40 })).join('')}</span>
+        </span>
       </a>`).join('') || '<p class="muted">Noch keine Trainer.</p>';
 
     root.querySelector('#pokemon-list').innerHTML = pokemon.map(({ pk, sp }) => `
@@ -63,7 +66,7 @@ export async function render(app) {
       <div id="pokemon-list" class="tiles"></div>
     </section>
 
-    <section class="card no-print">
+    <section class="card">
       <h2>Import / Export</h2>
       <p class="muted">Importiert neue <em>und</em> alte JSON-Dateien (PokemonTriadsSheetCreator). Bei mehreren Ständen desselben Pokémon gewinnt der neueste.</p>
       <div class="row wrap">

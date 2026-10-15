@@ -113,6 +113,8 @@ label { display: inline-flex; align-items: center; gap: 6px; }
 .log-box { background: var(--log-bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; white-space: pre-wrap; max-height: 260px; overflow: auto; }
 
 .type { display: inline-block; padding: 1px 8px; margin: 1px 3px 1px 0; border-radius: 999px; background: var(--c); color: #fff; font-size: .8em; font-weight: 600; text-shadow: 0 1px 1px rgb(0 0 0 / .35); }
+/* Typen des Pokémon im Bogenkopf: größer, damit sie herausstechen */
+.pk-types .type { font-size: 1.05rem; padding: 3px 14px; margin-right: 6px; letter-spacing: .02em; box-shadow: 0 1px 3px rgb(0 0 0 / .3); }
 .badge { display: inline-block; padding: 0 6px; border-radius: 4px; background: var(--badge-bg); font-size: .8em; }
 .badge.custom { background: var(--custom-bg); }
 .sprite { image-rendering: pixelated; object-fit: contain; }
@@ -125,6 +127,9 @@ label { display: inline-flex; align-items: center; gap: 6px; }
 .pk-tile { flex-direction: row; align-items: center; gap: 8px; }
 .pk-tile > span { display: flex; flex-direction: column; min-width: 0; }
 .team-strip { display: flex; flex-wrap: wrap; }
+.tr-tile { flex-direction: row; align-items: center; gap: 10px; }
+.tr-tile > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tr-portrait { width: 64px; height: 64px; flex: none; object-fit: cover; object-position: center top; border-radius: 8px; border: 1px solid var(--line); }
 
 /* ============================================================ Einstellungen / Homebrew */
 .table { border-collapse: collapse; margin: 6px 0; }
@@ -142,6 +147,11 @@ label { display: inline-flex; align-items: center; gap: 6px; }
 .dh-title { background: var(--dh-dark); color: var(--dh-dark-ink); padding: 10px 40px 10px 18px; display: flex; flex-direction: column; justify-content: center; clip-path: polygon(0 0, 100% 0, 92% 100%, 0 100%); }
 .dh-title b { font-size: 1.3rem; letter-spacing: .02em; }
 .dh-title span { letter-spacing: .12em; font-size: .9rem; }
+.portrait-wrap { position: relative; flex: none; align-self: center; margin: 6px 0; }
+.portrait { display: flex; align-items: center; justify-content: center; width: 92px; height: 92px; border: 2px solid var(--dh-border); border-radius: 10px; background: var(--field); overflow: hidden; cursor: pointer; }
+.portrait img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.portrait span { color: var(--muted); font-size: .8rem; }
+.portrait-del { position: absolute; top: -6px; right: -6px; border-radius: 50%; }
 .dh-fields { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap: 6px 10px; padding: 8px 0; }
 .dh-fields label { background: var(--field); border-radius: 6px; padding: 2px 8px; border: 1px solid var(--dh-border); min-height: 36px; }
 .dh-fields small { font-size: .65rem; font-weight: 700; flex: none; }
@@ -259,21 +269,6 @@ label { display: inline-flex; align-items: center; gap: 6px; }
   .bt-note { grid-column: 1 / -1; }
 }
 
-/* ============================================================ Druck (immer hell) */
-@media print {
-  :root, :root[data-theme] {
-    color-scheme: light;
-    --bg: #fff; --paper: #fff; --ink: #000; --muted: #555; --line: #999; --field: #fff;
-    --dh-head: #d9d9d9; --dh-dark: #2b2b2b; --dh-dark-ink: #fff; --dh-border: #555;
-    --dh-soft: #ccc; --dh-rule: #bbb; --box-on: #2b2b2b; --badge-bg: #eee; --log-bg: #fff;
-  }
-  body { font-size: 12px; }
-  main { max-width: none; padding: 0; }
-  .no-print, .topbar { display: none !important; }
-  .card, .dh-sec { break-inside: avoid; }
-  input, select, textarea { border-color: transparent !important; appearance: none; }
-}
-
 /* Entwickeln-Dialog */
 .evo-dlg { max-width: min(640px, calc(100vw - 32px)); border: 2px solid var(--dh-border); border-radius: var(--radius); background: var(--paper); color: var(--ink); padding: 16px 18px; }
 .evo-dlg::backdrop { background: rgb(0 0 0 / .5); }
@@ -308,7 +303,6 @@ label { display: inline-flex; align-items: center; gap: 6px; }
 .lvl-panel { border: 1px solid var(--dh-soft); border-radius: 8px; padding: 0 10px 2px; }
 .lvl-panel .banner { display: inline-block; margin-top: -1px; background: var(--dh-dark); color: var(--dh-dark-ink); font-weight: 700; font-size: .75rem; padding: 2px 8px; border-radius: 0 0 4px 4px; }
 .lvl-panel .row { margin: 6px 0; }
-.lvl-panel p { margin: 2px 0 6px; }
 .stat-row { display: flex; flex-wrap: wrap; gap: 10px; }
 @media (max-width: 900px) { .pk-traits-main { flex-basis: 100%; } }
 

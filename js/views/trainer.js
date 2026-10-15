@@ -1,6 +1,6 @@
 // Trainer-Bogen im Stil des Daggerheart-PDFs ("Pokémon Lokono Trainer sheet.pdf").
 
-import { esc, downloadJson, safeName, today, rerenderKeepingFocus } from '../core/util.js';
+import { esc, downloadJson, safeName, today, rerenderKeepingFocus, shrinkImage } from '../core/util.js';
 import { TRAINER_TRAITS } from '../core/constants.js';
 import {
   getTrainer, saveTrainer, deleteTrainer, teamOf, listPokemon, getPokemon, savePokemon, bundle,
@@ -27,6 +27,13 @@ export async function render(app, id) {
     sheet.innerHTML = `
       <header class="dh-head">
         <div class="dh-title"><b>POKÉMON-TRAINER</b><span>CHARACTER SHEET</span></div>
+        <div class="portrait-wrap">
+          <label class="portrait" title="${t.portrait ? 'Bild ändern' : 'Bild hinzufügen'}">
+            <input type="file" accept="image/*" id="portrait-file" hidden>
+            ${t.portrait ? `<img src="${esc(t.portrait)}" alt="Bild von ${esc(t.name)}">` : '<span>+ Bild</span>'}
+          </label>
+          ${t.portrait ? '<button class="mini portrait-del" data-act="del-portrait" title="Bild entfernen">×</button>' : ''}
+        </div>
         <div class="dh-fields">
           <label><small>NAME</small><input data-f="name" value="${esc(t.name)}"></label>
           <label><small>PRONOUNS</small><input data-f="pronouns" value="${esc(t.pronouns)}"></label>
@@ -81,9 +88,9 @@ export async function render(app, id) {
               <div class="exp-row">
                 <input data-f="experiences.${i}.text" value="${esc(x.text)}">
                 <input type="number" class="bonus" data-f="experiences.${i}.bonus" data-t="num" value="${x.bonus}">
-                <button class="mini no-print" data-act="del-exp" data-i="${i}" title="Entfernen">×</button>
+                <button class="mini" data-act="del-exp" data-i="${i}" title="Entfernen">×</button>
               </div>`).join('')}
-            <button class="no-print" data-act="add-exp">+ Experience</button>
+            <button data-act="add-exp">+ Experience</button>
           </section>
 
           <section class="dh-sec">
@@ -92,11 +99,11 @@ export async function render(app, id) {
               <div class="cf-item">
                 <div class="cf-head">
                   <input class="cf-name" data-f="classFeatures.${i}.name" value="${esc(cf.name)}" placeholder="Name des Features">
-                  <button class="mini no-print" data-act="del-cf" data-i="${i}" title="Feature entfernen">×</button>
+                  <button class="mini" data-act="del-cf" data-i="${i}" title="Feature entfernen">×</button>
                 </div>
                 <textarea class="cf-effect" data-f="classFeatures.${i}.effect" rows="5" placeholder="Effekt">${esc(cf.effect)}</textarea>
               </div>`).join('')}
-            <button class="no-print" data-act="add-cf">+ Class Feature</button>
+            <button data-act="add-cf">+ Class Feature</button>
           </section>
         </div>
 
@@ -116,16 +123,16 @@ export async function render(app, id) {
                   ${pk.types.map(typeBadge).join('')}
                 </a>
                 <input type="checkbox" data-active="${esc(pk.uuid)}" ${active ? 'checked' : ''} title="Aktiv im Team">
-                <button class="mini no-print" data-act="release" data-uuid="${esc(pk.uuid)}" title="Aus Team entfernen">×</button>
+                <button class="mini" data-act="release" data-uuid="${esc(pk.uuid)}" title="Aus Team entfernen">×</button>
               </div>`;
             }).join('') || '<p class="muted">Noch keine Pokémon.</p>'}
-            <form class="row wrap no-print" id="add-new">
+            <form class="row wrap" id="add-new">
               <input name="species" list="dex-dl" placeholder="Neues Pokémon: Art" required autocomplete="off">
               <input name="nickname" placeholder="Spitzname">
               <button>+ Neu</button>
             </form>
             ${free.length ? `
-            <div class="row wrap no-print">
+            <div class="row wrap">
               <select id="assign-select">${free.map((p) =>
                 `<option value="${esc(p.uuid)}">${esc(p.nickname || dex.get(p.speciesId)?.de || '?')} (Lv ${p.level})</option>`).join('')}</select>
               <button data-act="assign">Vorhandenes zuordnen</button>
@@ -144,9 +151,8 @@ export async function render(app, id) {
         </div>
       </div>
 
-      <div class="row wrap no-print sheet-actions">
+      <div class="row wrap sheet-actions">
         <button data-act="export">Export (inkl. Team)</button>
-        <button data-act="print">Drucken</button>
         <button data-act="delete" class="danger">Trainer löschen</button>
       </div>`;
   };
@@ -159,7 +165,18 @@ export async function render(app, id) {
     else t.team.push({ uuid, active });
   };
 
-  sheet.addEventListener('change', (e) => {
+  sheet.addEventListener('change', async (e) => {
+    if (e.target.id === 'portrait-file') {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        t.portrait = await shrinkImage(file);
+      } catch {
+        return alert('Dieses Bild konnte nicht gelesen werden. Bitte PNG, JPG oder WebP verwenden.');
+      }
+      saveTrainer(t);
+      return draw();
+    }
     const uuid = e.target.dataset.active;
     if (!uuid) return;
     setTeamFlag(uuid, e.target.checked);
@@ -180,6 +197,10 @@ export async function render(app, id) {
     else if (d.act === 'add-exp') t.experiences.push({ text: '', bonus: 2 });
     else if (d.act === 'del-exp') t.experiences.splice(+d.i, 1);
     else if (d.act === 'add-cf') t.classFeatures.push({ name: '', effect: '' });
+    else if (d.act === 'del-portrait') {
+      if (!confirm('Bild entfernen?')) return;
+      t.portrait = '';
+    }
     else if (d.act === 'del-cf') {
       const cf = t.classFeatures[+d.i];
       if ((cf.name || cf.effect) && !confirm(`Class Feature „${cf.name || 'ohne Namen'}“ entfernen?`)) return;
@@ -199,8 +220,7 @@ export async function render(app, id) {
     } else if (d.act === 'export') {
       return downloadJson(`Trainer_${safeName(t.name)}_${today()}.json`,
         bundle({ trainers: [t], pokemon: teamOf(t).map((x) => x.pk) }));
-    } else if (d.act === 'print') return window.print();
-    else if (d.act === 'delete') {
+    } else if (d.act === 'delete') {
       if (!confirm(`Trainer ${t.name} löschen? Die Pokémon bleiben erhalten.`)) return;
       deleteTrainer(t.id);
       location.hash = '#/';

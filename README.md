@@ -49,14 +49,14 @@ Es ist eine reine statische Webseite (HTML/CSS/JavaScript ohne Build-Schritt) un
 - **Würfelklassen anpassbar** (Seite „Regeln & Würfel“): BST-Grenzen, Würfelleiter, Legendär-Würfel, Reroll-Regel, Multiplikatoren. Pro Pokémon zusätzlich überschreibbar (bei 🔓)
 - **Import alter JSON-Dateien** (auch ganze Ordner wie `pokelogs/`). Bei mehreren Ständen desselben Pokémon gewinnt der neueste
 - **Homebrew-Editor** für eigene Pokémon, Attacken und Fähigkeiten, veröffentlichbar für alle (siehe Anleitung)
-- Export/Import als JSON, Druckansicht (immer hell)
+- Export/Import als JSON
 - **Darkmode:** Schalter oben rechts (Auto → Hell → Dunkel); „Auto“ folgt der Systemeinstellung
 
 ## Projektaufbau
 
 ```
 index.html               Einstieg (lädt nur js/main.js + CSS)
-css/style.css            Gesamtes Styling inkl. Daggerheart-Trainerbogen und Druckansicht
+css/style.css            Gesamtes Styling inkl. Daggerheart-Trainerbogen
 js/
   main.js                Router (#/, #/pokemon/<id>, #/trainer/<id>, #/settings, #/homebrew)
   core/                  Logik ohne Oberfläche
