@@ -38,7 +38,6 @@ export async function render(app, id) {
           <label><small>NAME</small><input data-f="name" value="${esc(t.name)}"></label>
           <label><small>PRONOUNS</small><input data-f="pronouns" value="${esc(t.pronouns)}"></label>
           <label><small>CLASS</small><input data-f="class" value="${esc(t.class)}"></label>
-          <label><small>BOON</small><input data-f="boon" value="${esc(t.boon)}"></label>
         </div>
         <label class="shield level"><input type="number" min="1" data-f="level" data-t="num" data-rerender value="${t.level}"><small>LEVEL</small></label>
       </header>
@@ -94,6 +93,22 @@ export async function render(app, id) {
           </section>
 
           <section class="dh-sec">
+            <h3 class="dh-banner">HERITAGE BONUS</h3>
+            <div class="note-item">
+              <div class="cf-head"><input class="cf-name" data-f="heritage.name" value="${esc(t.heritage.name)}" placeholder="Name des Heritage-Bonus"></div>
+              <textarea class="cf-effect" data-f="heritage.effect" rows="4" placeholder="Beschreibung">${esc(t.heritage.effect)}</textarea>
+            </div>
+          </section>
+
+          <section class="dh-sec">
+            <h3 class="dh-banner">BOON</h3>
+            <div class="note-item">
+              <div class="cf-head"><input class="cf-name" data-f="boon.name" value="${esc(t.boon.name)}" placeholder="Name des Boons"></div>
+              <textarea class="cf-effect" data-f="boon.effect" rows="4" placeholder="Beschreibung">${esc(t.boon.effect)}</textarea>
+            </div>
+          </section>
+
+          <section class="dh-sec">
             <h3 class="dh-banner">CLASS FEATURES</h3>
             ${t.classFeatures.map((cf, i) => `
               <div class="cf-item">
@@ -142,6 +157,19 @@ export async function render(app, id) {
           <section class="dh-sec">
             <h3 class="dh-banner">INVENTORY</h3>
             <textarea class="lined" data-f="inventory" rows="14">${esc(t.inventory)}</textarea>
+          </section>
+
+          <section class="dh-sec">
+            <h3 class="dh-banner">CONNECTIONS</h3>
+            ${t.connections.map((c, i) => `
+              <div class="note-item">
+                <div class="cf-head">
+                  <input class="cf-name" data-f="connections.${i}.name" value="${esc(c.name)}" placeholder="Name">
+                  <button class="mini" data-act="del-conn" data-i="${i}" title="Verbindung entfernen">×</button>
+                </div>
+                <textarea class="conn-info" data-f="connections.${i}.info" rows="2" placeholder="Info">${esc(c.info)}</textarea>
+              </div>`).join('')}
+            <button data-act="add-conn">+ Connection</button>
           </section>
 
           <section class="dh-sec">
@@ -205,6 +233,12 @@ export async function render(app, id) {
       const cf = t.classFeatures[+d.i];
       if ((cf.name || cf.effect) && !confirm(`Class Feature „${cf.name || 'ohne Namen'}“ entfernen?`)) return;
       t.classFeatures.splice(+d.i, 1);
+    }
+    else if (d.act === 'add-conn') t.connections.push({ name: '', info: '' });
+    else if (d.act === 'del-conn') {
+      const c = t.connections[+d.i];
+      if ((c.name || c.info) && !confirm(`Verbindung „${c.name || 'ohne Namen'}“ entfernen?`)) return;
+      t.connections.splice(+d.i, 1);
     }
     else if (d.act === 'assign') {
       const pk = getPokemon(sheet.querySelector('#assign-select').value);

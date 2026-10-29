@@ -334,7 +334,8 @@ label { display: inline-flex; align-items: center; gap: 6px; }
 @keyframes evo-glow { 0%, 100% { box-shadow: 0 0 0 0 rgb(138 92 246 / 0); } 50% { box-shadow: 0 0 12px 3px rgb(138 92 246 / .65); } }
 
 /* Class Features (Trainer): je Name + großes Effektfeld */
-.cf-item { border: 1px solid var(--dh-soft); border-radius: 8px; padding: 6px 8px 8px; margin-bottom: 10px; }
+.cf-item, .note-item { border: 1px solid var(--dh-soft); border-radius: 8px; padding: 6px 8px 8px; margin-bottom: 10px; }
 .cf-head { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
 .cf-name { flex: 1; font-weight: 700; border: none !important; border-bottom: 1px solid var(--dh-rule) !important; border-radius: 0; }
 .cf-effect { min-height: 7.5em; }
+.conn-info { min-height: 3.5em; }

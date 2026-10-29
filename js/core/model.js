@@ -96,7 +96,8 @@ const trainerDefaults = () => ({
   name: '',
   pronouns: '',
   class: '',
-  boon: '',
+  boon: { name: '', effect: '' },
+  heritage: { name: '', effect: '' }, // Heritage-Bonus
   portrait: '',          // Bild als data:-URL (verkleinert), reist mit Export/Backup mit
   level: 1,
   evasion: 10,
@@ -111,8 +112,9 @@ const trainerDefaults = () => ({
   hopeFeature: '',
   experiences: [{ text: '', bonus: 2 }, { text: '', bonus: 2 }],
   classFeatures: [{ name: '', effect: '' }], // beliebig viele, je Name + Effekt
+  connections: [],      // [{ name, info }]
   badges: Array(8).fill(false),
-  team: [],             // [{ uuid, active }] – Reihenfolge & Aktiv/Inaktiv
+  team: [],            // [{ uuid, active }] – Reihenfolge & Aktiv/Inaktiv
   inventory: '',
   notes: '',
   createdAt: new Date().toISOString(),
@@ -128,7 +130,10 @@ export function normalizeTrainer(t) {
     thresholds: { ...d.thresholds, ...t.thresholds },
     hp: { ...d.hp, ...t.hp },
     stress: { ...d.stress, ...t.stress },
+    heritage: { ...d.heritage, ...t.heritage },
   };
+  // Früher war der Boon nur ein Textfeld → wird zum Namen des Boons
+  out.boon = typeof t.boon === 'string' ? { ...d.boon, name: t.boon } : { ...d.boon, ...t.boon };
   // Früher gab es nur ein Textfeld "classFeature" → wird zum ersten Class Feature
   if (!t.classFeatures && t.classFeature) out.classFeatures = [{ name: '', effect: t.classFeature }];
   delete out.classFeature;

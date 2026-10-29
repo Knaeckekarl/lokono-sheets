@@ -346,6 +346,11 @@
         ok(sandbox.querySelector('.cf-item textarea.cf-effect') && sandbox.querySelector('.cf-item input.cf-name'), 'Name/Effekt-Felder');
         const { normalizeTrainer } = await import('../js/core/model.js');
         eq(normalizeTrainer({ classFeature: 'Alt' }).classFeatures, [{ name: '', effect: 'Alt' }], 'alter Text übernommen');
+        // Boon & Heritage mit Name + Beschreibung, Connections mit Name + Info
+        ok(sandbox.querySelector('[data-f="boon.effect"]') && sandbox.querySelector('[data-f="heritage.effect"]'), 'Boon/Heritage-Textfelder');
+        sandbox.querySelector('[data-act="add-conn"]').click();
+        ok(sandbox.querySelector('[data-f="connections.0.name"]') && sandbox.querySelector('[data-f="connections.0.info"]'), 'Connection-Felder');
+        eq(normalizeTrainer({ boon: 'Alt' }).boon, { name: 'Alt', effect: '' }, 'alter Boon-Text übernommen');
         t.portrait = url; saveTrainer(t);
         await (await import('../js/views/home.js')).render(sandbox);
         ok(sandbox.querySelector('.tr-tile .tr-portrait'), 'Trainer-Bild in der Übersicht fehlt');
