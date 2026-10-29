@@ -53,6 +53,18 @@ export async function render(app) {
           <label>dann alle <input type="number" name="accEvaEvery" min="1" value="${s.accEvaEvery}"> Level</label>
         </div>
 
+        <h3>Stats an Level angleichen</h3>
+        <div class="row wrap">
+          <label>Entwicklungsboni <input type="number" name="levelStatEvoShare" min="0" max="100" step="5"
+            value="${Math.round(s.levelStatEvoShare * 100)}"> %</label>
+        </div>
+        <p class="muted">Ein per Levelup trainiertes Pokémon bekommt bei jeder Entwicklung Bonuswürfe auf alle Statuswerte
+          (je angefangene 10 Level ein Wurf der neuen Würfelklasse). Beim Angleichen wird geschätzt, wie viele Statpunkte ein
+          trainiertes Pokémon gleichen Levels im Schnitt hätte. Dieser Wert legt fest, wie viel Prozent der Entwicklungswürfe
+          dabei mitzählen. Ein Teil des Entwicklungssprungs steckt bereits in den höheren Basiswerten der neuen Art,
+          deshalb ist 45 % der Standard. Höhere Werte machen angeglichene Pokémon, die sich schon entwickelt haben, stärker;
+          bei 100 % zählen alle Entwicklungswürfe voll. Auf Pokémon ohne durchlaufene Entwicklung wirkt der Wert nicht.</p>
+
         <div class="row wrap">
           <button class="primary">Speichern</button>
           <button type="button" data-act="reset">Auf Standard zurücksetzen</button>
@@ -90,6 +102,7 @@ export async function render(app) {
       speedMultiplier: +f.get('speedMultiplier') || 1,
       accEvaStart: Math.max(1, +f.get('accEvaStart') || 10),
       accEvaEvery: Math.max(1, +f.get('accEvaEvery') || 5),
+      levelStatEvoShare: Math.min(100, Math.max(0, +f.get('levelStatEvoShare') || 0)) / 100,
     };
   };
 

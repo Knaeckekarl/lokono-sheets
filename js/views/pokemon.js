@@ -2,7 +2,7 @@
 
 import { esc, downloadJson, safeName, today, uid, rerenderKeepingFocus } from '../core/util.js';
 import {
-  STATS, STAT_LABELS, MOVE_CATEGORIES, STATUS_EFFECTS, GENDERS, MAX_TYPES, MAX_ABILITIES, defensiveMatchups,
+  STATS, STAT_LABELS, MOVE_CATEGORIES, STATUS_EFFECTS, GENDERS, MAX_TYPES, MAX_ABILITIES, TRAINER_TRAITS, defensiveMatchups,
 } from '../core/constants.js';
 import { getSpecies, getMoves, getAbilities } from '../core/data.js';
 import {
@@ -12,11 +12,12 @@ import {
   diceClassFor, effectiveDice, expForNextLevel, possibleLevelUps, levelUp, undoLevelUp,
   calcAccuracy, calcEvasion, BATTLE_STATS, battleValue, heal,
   evolve, evolutionRollCount, mapAbilities, pendingBonusPoints, assignBonusPoint,
+  LEVEL_STAT_TIERS, LEVEL_STAT_STRENGTHS, strengthIndex, strengthLabel, levelStats, adjustToLevel,
 } from '../core/rules.js';
 import { describeMoveEffects } from '../core/effects.js';
 import { isCustomForm, allowedGenders, learnableMoves } from '../core/model.js';
 import {
-  spriteImg, typeBadge, typeOptions, bindFields, dhBanner,
+  spriteImg, typeBadge, typeOptions, bindFields, dhBanner, speciesDatalist, parseSpeciesInput,
 } from './shared.js';
 
 const BATTLE_LABELS = { ...STAT_LABELS, initiative: 'Kampf-Init.' };
@@ -49,7 +50,8 @@ export async function render(app, uuid) {
     <datalist id="ability-dl-species">${info.abilities.map((a) => `<option value="${esc(abilities[a]?.n || a)}">`).join('')}</datalist>
     <div id="sheet" class="sheet dh-sheet pokemon-sheet"></div>
     <dialog id="evo-dlg" class="evo-dlg"></dialog>
-    <dialog id="pt-dlg" class="evo-dlg"></dialog>`;
+    <dialog id="pt-dlg" class="evo-dlg"></dialog>
+    <dialog id="adj-dlg" class="evo-dlg"></dialog>`;
   const sheet = root.querySelector('#sheet');
   const save = (m) => savePokemon(m);
 
@@ -123,7 +125,15 @@ export async function render(app, uuid) {
           </div>
         </div>
         <div class="pk-traits-main">
-          <div class="stat-row">
+          <div class="stat-row dh-trait-row">
+            ${TRAINER_TRAITS.map(([k, label, sub]) => `
+              <div class="trait">
+                <div class="banner">${label}<input type="checkbox" data-f="traitMarks.${k}" ${pk.traitMarks[k] ? 'checked' : ''} title="markiert"></div>
+                <input type="number" class="trait-val" data-f="traits.${k}" data-t="num" value="${pk.traits[k]}">
+                <small>${sub.replaceAll(' · ', '<br>')}</small>
+              </div>`).join('')}
+          </div>
+          <div class="stat-row pk-stat-row">
             ${STATS.map((s) => `
               <label class="trait">
                 <span class="banner">${STAT_LABELS[s]}</span>
@@ -153,9 +163,10 @@ export async function render(app, uuid) {
                 `<option value="${i + 1}" ${i + 1 === possible ? 'selected' : ''}>${i + 1}</option>`).join('')}</select>` : ''}
             <button data-act="levelup" class="primary" ${possible ? '' : 'disabled'}>⬆ ${possible > 1 ? 'Levelups' : 'Levelup'}</button>
             <button data-act="levelup-free" ${pk.level < 100 ? '' : 'disabled'} title="Level ohne EXP-Kosten, z.B. vom Spielleiter">+1 Level ohne EXP</button>
-            <button data-act="undo" ${pk.levelLog.length ? '' : 'disabled'} title="Letztes Levelup bzw. letzte Entwicklung rückgängig machen">↶ Rückgängig</button>
-            ${info.evo?.next?.length ? `<button data-act="evolve" class="evo-btn ${evoReady ? 'ready' : ''}"
-              title="${evoReady ? 'Level-Bedingung für eine Entwicklung erfüllt' : 'Entwicklung auswählen'}">✨ Entwickeln</button>` : ''}
+            <button data-act="adjust" title="Statuswerte nach Spielformel neu setzen (schwach / normal / stark / spezialisiert)">⚖ Stats an Level angleichen</button>
+            <button data-act="undo" ${pk.levelLog.length ? '' : 'disabled'} title="Letzten Protokolleintrag (Levelup, Entwicklung, Angleichen) rückgängig machen">↶ Rückgängig</button>
+            ${info.evo?.next?.length || pk.unlocked ? `<button data-act="evolve" class="evo-btn ${evoReady ? 'ready' : ''}"
+              title="${evoReady ? 'Level-Bedingung für eine Entwicklung erfüllt' : info.evo?.next?.length ? 'Entwicklung auswählen' : 'Custom-Entwicklung zu einer frei gewählten Art'}">✨ Entwickeln</button>` : ''}
             ${pending.length ? `<button data-act="points" class="pt-open" title="Ab Lv ${settings.accEvaStart} alle ${settings.accEvaEvery} Level: +1 Accuracy oder Evasion">🎯 ${pending.length} Punkt${pending.length > 1 ? 'e' : ''} für Accuracy/Evasion offen</button>` : ''}
             <span class="muted small">${possible ? `${possible} Levelup${possible > 1 ? 's' : ''} möglich · ` : ''}Würfel ${effectiveDice(pk, info, settings)} · ${settings.rerollOnes ? '1en werden neu gewürfelt' : '1en zählen'} · KP ×${settings.hpMultiplier} · Initiative ×${settings.speedMultiplier}</span>
           </div>
@@ -312,10 +323,15 @@ export async function render(app, uuid) {
           render(app, uuid); // Art hat sich geändert → Bogen mit alten Artdaten neu laden
           return 'navigated';
         }
-        if (confirm(`Levelup Lv ${last.from} → ${last.to} rückgängig machen?`)) undoLevelUp(pk);
+        const what = last.type === 'adjust' ? `Angleichen der Stats (${last.tier ? LEVEL_STAT_TIERS[last.tier] : strengthLabel(last.factor)})` : `Levelup Lv ${last.from} → ${last.to}`;
+        if (confirm(`${what} rückgängig machen?`)) undoLevelUp(pk);
       },
       evolve() {
         openEvolution();
+        return 'navigated';
+      },
+      adjust() {
+        openAdjust();
         return 'navigated';
       },
       heal() {
@@ -401,22 +417,127 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
     draw();
   });
 
+  // ---------------------------------------------------------------- Stats an Level angleichen
+  const adjDlg = root.querySelector('#adj-dlg');
+  let adj = null; // { factor, focus: [Stat 1, Stat 2], focusShare }
+
+  /** Statpunkte mit KP ÷ Multiplikator – vergleichbar mit Levelup-Würfen. */
+  const statPoints = (stats) => Math.round(STATS.reduce((sum, s) =>
+    sum + stats[s] / (s === 'hp' ? settings.hpMultiplier : s === 'speed' ? settings.speedMultiplier : 1), 0));
+  const percent = (x) => `${Math.round(x * 100)} %`;
+
+  function openAdjust() {
+    const { primary, secondary } = pk.levelUp;
+    adj = {
+      factor: LEVEL_STAT_STRENGTHS[strengthIndex(settings.levelStatFactor)].factor,
+      focus: [primary, secondary && secondary !== primary ? secondary : ''],
+      focusShare: settings.levelStatFocusShare,
+    };
+    drawAdjust();
+    adjDlg.showModal();
+  }
+
+  // Regler: Wert im Formular → { adj-Wert, Anzeige }
+  const sliders = {
+    factor: (v) => ({ value: LEVEL_STAT_STRENGTHS[v].factor, text: LEVEL_STAT_STRENGTHS[v].label }),
+    focusShare: (v) => ({ value: v, text: percent(v) }),
+  };
+  const sliderLabels = { factor: 'Stärke', focusShare: 'Spezialisierung' };
+  const slider = (name, value, { min = 0, max = 1, step = 0.05 } = {}) => `
+    <label class="adj-slider"><span>${sliderLabels[name]}</span>
+      <input type="range" name="${name}" min="${min}" max="${max}" step="${step}" value="${value}">
+      <output name="${name}Out">${sliders[name](value).text}</output></label>`;
+
+  function adjPreview() {
+    const next = levelStats(pk, info, settings, adj);
+    return `
+      <tr><th></th><th>Aktuell</th><th>Neu</th></tr>
+      ${STATS.map((s) => {
+        const d = next[s] - pk.stats[s];
+        return `<tr><th>${STAT_LABELS[s]}</th><td>${pk.stats[s]}</td><td><b>${next[s]}</b>
+          <span class="${d > 0 ? 'up' : d < 0 ? 'down' : 'muted'}">(${d > 0 ? '+' : ''}${d})</span></td></tr>`;
+      }).join('')}
+      <tr><th title="KP ÷ ${settings.hpMultiplier}">Statpunkte</th><td>${statPoints(pk.stats)}</td><td><b>${statPoints(next)}</b></td></tr>`;
+  }
+
+  function drawAdjust() {
+    // Einheitliche Spaltenbreiten für beide Regler: längster Name bzw. längste Stufen-Bezeichnung passt vollständig
+    const longest = (texts) => `${Math.max(...texts.map((t) => t.length))}ch`;
+    const columns = `--adj-label: ${longest(Object.values(sliderLabels))}; --adj-out: ${longest(LEVEL_STAT_STRENGTHS.map((s) => s.label))}`;
+    adjDlg.innerHTML = `
+      <form method="dialog" style="${columns}">
+        <h3>⚖ Stats an Level ${pk.level} angleichen</h3>
+        <p class="muted small">Gesamtpunkte nach dem Würfelsystem, Verteilung nach den Basiswerten von ${esc(info.de)}
+          und den gewählten Stats.</p>
+        ${slider('factor', strengthIndex(adj.factor), { max: LEVEL_STAT_STRENGTHS.length - 1, step: 1 })}
+        <hr class="adj-sep">
+        ${slider('focusShare', adj.focusShare)}
+        <div class="evo-choice">
+          <label>Stat 1 <select name="focus0">${statOptions(adj.focus[0])}</select></label>
+          <label>Stat 2 <select name="focus1"><option value="">—</option>${statOptions(adj.focus[1], adj.focus[0])}</select></label>
+        </div>
+        <p class="muted small">Ändert nur die Verteilung, nicht die Gesamtpunkte. Dieser Anteil wird wie bei Levelups verteilt:
+          Stat 1 als Primärwahl (½ davon), Stat 2 als Sekundärwahl (⅙), die übrigen Stats je 1/12.
+          Der Rest folgt den Basiswerten. 0 % = nur Basiswerte, 100 % = wie ein komplett per Levelup trainiertes Pokémon.</p>
+        <table class="adj-table">${adjPreview()}</table>
+        <p class="muted small">Die Statuswerte werden ersetzt, KP werden aufgefüllt. Lässt sich über „↶ Rückgängig“ zurücknehmen.</p>
+        <div class="row wrap">
+          <button value="cancel">Abbrechen</button>
+          <button value="ok" class="primary">⚖ Übernehmen</button>
+        </div>
+      </form>`;
+  }
+
+  // Regler: nur Prozentanzeige und Tabelle neu zeichnen, damit der Regler beim Ziehen nicht ersetzt wird
+  adjDlg.addEventListener('input', (e) => {
+    const { name, value, type, form } = e.target;
+    if (type !== 'range') return;
+    const { value: v, text } = sliders[name](+value);
+    adj[name] = v;
+    form.elements[`${name}Out`].value = text;
+    adjDlg.querySelector('.adj-table').innerHTML = adjPreview();
+  });
+
+  adjDlg.addEventListener('change', (e) => {
+    const { name, value, type } = e.target;
+    if (type === 'range') return;
+    if (name === 'focus0') {
+      adj.focus[0] = value;
+      if (adj.focus[1] === value) adj.focus[1] = '';
+    }
+    if (name === 'focus1') adj.focus[1] = value;
+    drawAdjust();
+  });
+
+  adjDlg.addEventListener('submit', (e) => {
+    if (e.submitter?.value !== 'ok' || !adj) return;
+    adjustToLevel(pk, info, settings, adj);
+    adj = null;
+    save(pk);
+    draw();
+    sheet.querySelector('.level-log li')?.classList.add('flash');
+  });
+
   // ---------------------------------------------------------------- Entwickeln-Dialog
   const dlg = root.querySelector('#evo-dlg');
-  // { targets: [{ info, cond }], index, selected: [Fähigkeiten], custom, customTypes, formName, dice }
+  // { targets: [{ info, cond, free }], index, selected: [Fähigkeiten], custom, customTypes, formName, dice }
+  // free = frei gewählte Art (Custom-Entwicklung, nur mit 🔓)
   let evo = null;
 
   /** Empfohlene Fähigkeiten: positionsgenau ersetzt, eigene Änderungen bleiben. */
   const recommended = (to) => mapAbilities(pk.abilities, info, to).filter(Boolean).slice(0, MAX_ABILITIES);
-  const target = () => evo.targets[evo.index].info;
+  const target = () => evo.targets[evo.index]?.info;
 
   async function openEvolution() {
-    const targets = await Promise.all(info.evo.next.map(async (n) => ({ info: await getSpecies(n.id), cond: n.cond })));
+    const targets = await Promise.all((info.evo?.next || []).map(async (n) => ({ info: await getSpecies(n.id), cond: n.cond })));
+    // Artenliste für die Custom-Entwicklung nur einmal bauen (groß)
+    if (pk.unlocked && !root.querySelector('#evo-dex-dl')) root.insertAdjacentHTML('beforeend', await speciesDatalist('evo-dex-dl'));
     // Ist das Pokémon schon eine Custom-Form, startet der Dialog mit deren Typen
     const custom = isCustomForm(pk, info);
+    const first = targets[0]?.info;
     evo = {
-      targets, index: 0, selected: recommended(targets[0].info),
-      custom, customTypes: custom ? [...pk.types] : [...targets[0].info.types], formName: pk.formName,
+      targets, index: 0, selected: first ? recommended(first) : pk.abilities.filter(Boolean),
+      custom, customTypes: custom || !first ? [...pk.types] : [...first.types], formName: pk.formName,
       dice: pk.levelUp.diceOverride ?? '',
     };
     drawEvolution();
@@ -440,6 +561,34 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
 
   function drawEvolution() {
     const to = target();
+    const free = evo.targets.find((t) => t.free);
+    const targetList = `
+        <div class="evo-targets">
+          ${evo.targets.map((t, i) => `
+            <label class="evo-opt ${i === evo.index ? 'on' : ''}">
+              <input type="radio" name="target" value="${i}" ${i === evo.index ? 'checked' : ''}>
+              ${spriteImg(t.info.id, { shiny: pk.shiny, size: 56 })}
+              <span><b>${esc(t.info.de)}</b> ${t.info.types.map(typeBadge).join('')}<br>
+                <small class="muted">${t.free ? '🔓 Custom-Entwicklung' : `Bedingung im Spiel: ${esc(t.cond)}`}</small></span>
+            </label>`).join('')}
+          ${pk.unlocked ? `
+            <label class="evo-opt evo-free">🔓 Andere Art:
+              <input name="freeTarget" list="evo-dex-dl" value="${free ? esc(`${free.info.de} #${free.info.id}`) : ''}" placeholder="Art suchen …" autocomplete="off">
+            </label>` : ''}
+        </div>`;
+    if (!to) {
+      dlg.innerHTML = `
+      <form method="dialog" class="evo-form">
+        <h3>✨ Entwicklung: ${esc(pk.nickname || info.de)} <span class="muted">(${esc(info.de)})</span></h3>
+        ${targetList}
+        <p class="muted small">${esc(info.de)} entwickelt sich im Spiel nicht weiter. Wähle eine beliebige Art als Custom-Entwicklung.</p>
+        <div class="row wrap">
+          <button value="cancel">Abbrechen</button>
+          <button value="ok" class="primary" disabled>✨ Entwickeln</button>
+        </div>
+      </form>`;
+      return;
+    }
     const auto = diceClassFor(to, settings);
     const usedDice = evo.dice || auto.dice;
     const count = evolutionRollCount(pk.level);
@@ -451,15 +600,7 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
     dlg.innerHTML = `
       <form method="dialog" class="evo-form">
         <h3>✨ Entwicklung: ${esc(pk.nickname || info.de)} <span class="muted">(${esc(info.de)})</span></h3>
-        <div class="evo-targets">
-          ${evo.targets.map((t, i) => `
-            <label class="evo-opt ${i === evo.index ? 'on' : ''}">
-              <input type="radio" name="target" value="${i}" ${i === evo.index ? 'checked' : ''}>
-              ${spriteImg(t.info.id, { shiny: pk.shiny, size: 56 })}
-              <span><b>${esc(t.info.de)}</b> ${t.info.types.map(typeBadge).join('')}<br>
-                <small class="muted">Bedingung im Spiel: ${esc(t.cond)}</small></span>
-            </label>`).join('')}
-        </div>
+        ${targetList}
 
         <h4>Würfelklasse</h4>
         <div class="evo-choice">
@@ -517,14 +658,31 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
       </form>`;
   }
 
+  /** Ziel wechseln: Fähigkeiten-Empfehlung und (ohne Custom-Form) Typen der neuen Art übernehmen. */
+  function selectTarget(i) {
+    evo.index = i;
+    evo.selected = recommended(target());
+    if (!evo.custom) evo.customTypes = [...target().types];
+  }
+
+  /** Custom-Entwicklung: frei gewählte Art als (einziges) freies Ziel eintragen. */
+  async function setFreeTarget(value) {
+    const id = value.trim() ? await parseSpeciesInput(value) : null;
+    if (value.trim() && !id) alert('Pokémon nicht gefunden – bitte aus der Liste wählen.');
+    evo.targets = evo.targets.filter((t) => !t.free);
+    if (id) {
+      evo.targets.push({ info: await getSpecies(id), cond: 'Custom-Entwicklung', free: true });
+      selectTarget(evo.targets.length - 1);
+    } else if (evo.targets.length) selectTarget(Math.min(evo.index, evo.targets.length - 1));
+    else evo.index = 0;
+    drawEvolution();
+  }
+
   dlg.addEventListener('change', (e) => {
     const { name, value, checked } = e.target;
     if (name === 'formName') return; // Textfeld: siehe "input", kein Neuzeichnen (Fokus bleibt)
-    if (name === 'target') {
-      evo.index = +value;
-      evo.selected = recommended(target());
-      if (!evo.custom) evo.customTypes = [...target().types];
-    }
+    if (name === 'freeTarget') return void setFreeTarget(value);
+    if (name === 'target') selectTarget(+value);
     if (name === 'dice') evo.dice = value;
     if (name === 'ability') evo.selected = [...dlg.querySelectorAll('input[name="ability"]:checked')].map((x) => x.value);
     if (name === 'customForm') evo.custom = checked;
@@ -533,6 +691,14 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
   });
   dlg.addEventListener('input', (e) => {
     if (e.target.name === 'formName') evo.formName = e.target.value;
+    // Auswahl aus der Liste ("Name #123") direkt übernehmen
+    if (e.target.name === 'freeTarget' && /#\d+\s*$/.test(e.target.value)) setFreeTarget(e.target.value);
+  });
+  // Enter im Suchfeld würde das Formular mit "Abbrechen" absenden → stattdessen Art übernehmen
+  dlg.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.target.name !== 'freeTarget') return;
+    e.preventDefault();
+    e.target.blur(); // löst "change" aus
   });
   // Schnellauswahl Fähigkeiten
   dlg.addEventListener('click', (e) => {
@@ -547,8 +713,8 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
 
   // Formular mit method="dialog": "submit" kommt direkt beim Klick (zuverlässiger als "close")
   dlg.addEventListener('submit', (e) => {
-    if (e.submitter?.value !== 'ok' || !evo) return;
-    const to = target();
+    const to = evo && target();
+    if (e.submitter?.value !== 'ok' || !to) return;
     evolve(pk, info, to, settings, {
       abilities: evo.selected,
       customForm: evo.custom ? { types: evo.customTypes, formName: evo.formName.trim() } : null,
@@ -658,6 +824,20 @@ function abilityRow(slug, i, abilities, info, unlocked) {
 function logEntry(e) {
   const dice = (r) => r.dice.map((d) =>
     `[${d.faces.map((f, k) => (k < d.faces.length - 1 ? `<s title="neu gewürfelt">${f}</s>` : `<b>${f}</b>`)).join('→')}]`).join(' + ');
+  if (e.type === 'adjust') {
+    const pct = (x) => `${Math.round(x * 100)} %`;
+    const parts = [
+      e.tier ? LEVEL_STAT_TIERS[e.tier] : strengthLabel(e.factor), // e.tier: ältere Einträge mit fester Stufe
+      e.focus.length && `Spezialisierung ${e.focusShare != null ? `${pct(e.focusShare)} ` : ''}auf ${e.focus.map((s) => STAT_LABELS[s]).join(', ')}`,
+      e.evoShare != null && `Entwicklungsboni ${pct(e.evoShare)}`,
+    ].filter(Boolean).join(' · ');
+    return `
+    <li class="log-adjust">
+      <div><b>⚖ Stats an Lv ${e.to} angeglichen</b> · ${parts}
+        <span class="muted">· ${new Date(e.at).toLocaleString('de-DE')}</span></div>
+      <ul>${e.changes.map((c) => `<li><b>${STAT_LABELS[c.stat]}</b> ${c.before} → <b>${c.after}</b></li>`).join('')}</ul>
+    </li>`;
+  }
   if (e.type === 'evolution') {
     const evoRolls = e.rolls.map((r) => `
       <li><b>${STAT_LABELS[r.stat]}</b> ${r.before} → <b>${r.after}</b> <span class="muted">(+${r.gain})</span>

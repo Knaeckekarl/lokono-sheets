@@ -16,10 +16,11 @@
   <p id="summary"></p>
   <div id="sandbox"></div>
   <script type="module">
-    import { rollDie, roll, formatRoll, parseDice } from '../js/core/dice.js';
+    import { rollDie, roll, formatRoll, parseDice, expectedDie } from '../js/core/dice.js';
     import {
       DEFAULT_SETTINGS, diceClassFor, levelUp, undoLevelUp, expForNextLevel, possibleLevelUps, battleValue, heal,
       evolve, evolutionRollCount, mapAbilities, pendingBonusPoints, assignBonusPoint, isBonusLevel,
+      levelStats, adjustToLevel, expectedTrainedTotal, strengthLabel,
     } from '../js/core/rules.js';
     import { getSpecies, getMoves } from '../js/core/data.js';
     import { describeMoveEffects } from '../js/core/effects.js';
@@ -169,6 +170,39 @@
       eq(pk.abilities.length, 3, 'max. 3 Fähigkeiten');
     });
 
+    // ---------------- Stats an Level angleichen
+    await test('Erwartungswert eines Wurfs', () => {
+      eq(expectedDie('1W6', true), 4); eq(expectedDie('1W6', false), 3.5); eq(expectedDie('2W6', true), 8);
+    });
+    await test('Stats an Level angleichen: Stärke, Spezialisierung, Entwicklungsboni, Rückgängig', async () => {
+      const info = await getSpecies(3); // Bisaflor
+      const pk = createPokemon(info, DEFAULT_SETTINGS, { level: 70 });
+      const points = (st) => st.hp / DEFAULT_SETTINGS.hpMultiplier + st.speed + st.attack + st.defense + st.spAttack + st.spDefense;
+      const [weak, normal, strong] = [0.7, 0.8, 0.9].map((factor) => levelStats(pk, info, DEFAULT_SETTINGS, { factor }));
+      ok(points(weak) < points(normal) && points(normal) < points(strong), 'Stärke 70 % < 80 % < 90 %');
+      eq(levelStats(pk, info, DEFAULT_SETTINGS), normal, 'ohne Optionen: Standard aus den Einstellungen ("normal")');
+      eq([0.5, 0.8, 0.9, 0.75].map(strengthLabel), ['extrem schwach', 'normal', 'stark', '75 %'], 'Stärke-Bezeichnungen');
+      eq(levelStats(pk, info, DEFAULT_SETTINGS, { factor: 0.9 }), strong, 'deterministisch');
+      ok(points(strong) < expectedTrainedTotal(pk, info, DEFAULT_SETTINGS), 'trainiert bleibt stärker');
+      ok(strong.spAttack > strong.attack, 'Verteilung folgt den Basiswerten (Sp. Angriff 100 > Angriff 82)');
+      const spec = levelStats(pk, info, DEFAULT_SETTINGS, { factor: 0.9, focus: ['attack', 'speed'] });
+      ok(Math.abs(points(spec) - points(strong)) <= 3, `Spezialisierung ändert die Statpunkte nicht (${points(spec)} / ${points(strong)})`);
+      ok(spec.attack > strong.attack && spec.speed > strong.speed, 'Fokus-Stats stärker');
+      ok(spec.defense < strong.defense, 'übrige Stats etwas schwächer');
+      ok(spec.attack > spec.speed, 'Stat 1 (Primär) wiegt mehr als Stat 2 (Sekundär)');
+      ok(spec.attack > strong.attack * 1.5, `Spezialisierung fällt deutlich ins Gewicht (${spec.attack} / ${strong.attack})`);
+      eq(levelStats(pk, info, DEFAULT_SETTINGS, { factor: 0.9, focus: ['attack'], focusShare: 0 }), strong, 'Spezialisierung 0 % = nur Basiswerte');
+      const fullEvo = levelStats(pk, info, DEFAULT_SETTINGS, { factor: 0.9, evoShare: 1 });
+      ok(points(fullEvo) > points(strong), `Regler Entwicklungsboni macht stärker (${points(fullEvo)} / ${points(strong)})`);
+      const before = structuredClone(pk.stats);
+      const e = adjustToLevel(pk, info, DEFAULT_SETTINGS, { factor: 0.75, focus: ['attack', 'attack', 'speed'], evoShare: 0.8, focusShare: 0.6 });
+      eq(e.type, 'adjust'); eq(e.focus, ['attack', 'attack'], 'höchstens 2 Einträge');
+      eq([e.factor, e.evoShare, e.focusShare], [0.75, 0.8, 0.6], 'Reglerwerte im Protokoll');
+      eq(pk.currentHp, pk.stats.hp, 'KP aufgefüllt');
+      undoLevelUp(pk);
+      eq(pk.stats, before); eq(pk.levelLog, []);
+    });
+
     // ---------------- Sperre für untypische Änderungen
     await test('Arttypisch: Lernset & Geschlechter', async () => {
       const info = await getSpecies(318);
@@ -201,6 +235,39 @@
       eq(v.getUint32(v.getUint32(end + 16, true), true), 0x02014b50, 'Central Directory');
     });
 
+    await test('Custom-Entwicklung: Knopf nur mit 🔓, freie Zielart', async () => {
+      const sandbox = document.getElementById('sandbox');
+      const pk = createPokemon(await getSpecies(128), DEFAULT_SETTINGS, { nickname: '__test__' }); // Tauros entwickelt sich nicht
+      savePokemon(pk);
+      try {
+        const view = await import('../js/views/pokemon.js');
+        await view.render(sandbox, pk.uuid);
+        ok(!sandbox.querySelector('[data-act="evolve"]'), 'ohne 🔓 kein Entwickeln');
+        const sw = sandbox.querySelector('[data-f="unlocked"]');
+        sw.checked = true; sw.dispatchEvent(new Event('change', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 50));
+        sandbox.querySelector('[data-act="evolve"]').click();
+        await new Promise((r) => setTimeout(r, 500));
+        const dlg = sandbox.querySelector('#evo-dlg');
+        ok(dlg.open, 'Dialog nicht geöffnet');
+        ok(dlg.querySelector('button[value="ok"]').disabled, 'ohne Ziel nicht entwickelbar');
+        const input = dlg.querySelector('input[name="freeTarget"]');
+        input.value = 'Bisasam #1';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 300));
+        ok(!dlg.querySelector('button[value="ok"]').disabled, 'Ziel gewählt → entwickelbar');
+        dlg.querySelector('button[value="ok"]').click();
+        await new Promise((r) => setTimeout(r, 300));
+        const saved = (await import('../js/core/store.js')).getPokemon(pk.uuid);
+        eq(saved.speciesId, 1, 'zu Bisasam entwickelt');
+        eq(saved.levelLog.at(-1).type, 'evolution');
+      } finally {
+        sandbox.querySelector('dialog[open]')?.close();
+        sandbox.replaceChildren();
+        deletePokemon(pk.uuid);
+      }
+    });
+
     // ---------------- Views rendern ohne Fehler
     await test('Pokémon- und Trainer-Bogen rendern', async () => {
       const sandbox = document.getElementById('sandbox');
@@ -210,7 +277,9 @@
       saveTrainer(t); pk.trainerId = t.id; savePokemon(pk);
       try {
         await (await import('../js/views/pokemon.js')).render(sandbox, pk.uuid);
-        ok(sandbox.querySelectorAll('.trait-val').length === 6, 'Statuswerte fehlen');
+        eq(sandbox.querySelectorAll('.stat-row:not(.dh-trait-row) .trait-val').length, 6, 'Statuswerte fehlen');
+        eq(sandbox.querySelectorAll('.dh-trait-row [data-f^="traits."]').length, 6, 'Daggerheart-Traits fehlen');
+        ok(sandbox.querySelector('[data-act="adjust"]'), 'Angleichen-Knopf fehlt');
         ok(sandbox.querySelector('.pk-traits .lvl-panel [data-act="levelup"]'), 'Level-Bereich fehlt');
         ok(sandbox.querySelector('.lvl-panel .row > span.muted'), 'Infotext neben den Knöpfen fehlt');
         ok(sandbox.querySelector('[data-act="evolve"].evo-btn'), 'Entwickeln-Knopf nicht hervorgehoben');

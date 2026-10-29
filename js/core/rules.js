@@ -1,7 +1,7 @@
 // Alle Spielregeln an EINER Stelle. Wer Regeln ändern will, ändert nur diese Datei
 // (bzw. die Einstellungen in der App, die DEFAULT_SETTINGS überschreiben).
 
-import { roll } from './dice.js';
+import { roll, expectedDie } from './dice.js';
 import { STATS, MAX_TYPES, MAX_ABILITIES } from './constants.js';
 
 export const DEFAULT_SETTINGS = {
@@ -24,6 +24,12 @@ export const DEFAULT_SETTINGS = {
   speedMultiplier: 1,       // Initiative hat KEINEN Multiplikator
   accEvaStart: 10,          // ab diesem Level …
   accEvaEvery: 5,           // … alle X Level einen Punkt für Accuracy ODER Evasion
+  // "Stats an Level angleichen" (Startwerte der Regler im Dialog)
+  levelStatFactor: 0.8,     // Stärke "normal": Anteil an den Statpunkten eines trainierten Pokémon (siehe LEVEL_STAT_STRENGTHS)
+  // Anteil der Entwicklungs-Bonuswürfe, der in die Gesamtpunkte einfließt. Ein trainiertes Pokémon bekommt bei
+  // jeder Entwicklung Bonuswürfe auf alle Stats; ein Teil davon steckt schon in den höheren Basiswerten der neuen Art.
+  levelStatEvoShare: 0.45,
+  levelStatFocusShare: 0.5, // Spezialisierung: Anteil der Punkte, der wie Levelups auf Primär-/Sekundärwahl verteilt wird
 };
 
 // ---------------------------------------------------------------- Würfelklasse
@@ -300,6 +306,119 @@ export function evolve(pk, fromInfo, toInfo, settings, { abilities = 'replace', 
     rerollOnes: settings.rerollOnes,
     choice: { abilities, customForm, dice },
     rolls,
+    snapshot,
+  };
+  pk.levelLog.push(entry);
+  return entry;
+}
+
+// ---------------------------------------------------------------- Stats an Level angleichen
+
+/** Feste Stufen alter Protokolleinträge (nur noch für deren Anzeige). */
+export const LEVEL_STAT_TIERS = { weak: 'schwach', normal: 'normal', strong: 'stark', specialized: 'spezialisiert' };
+
+/** Stufen des Stärke-Reglers: Anteil an den Statpunkten eines trainierten Pokémon. */
+export const LEVEL_STAT_STRENGTHS = [
+  { factor: 0.5, label: 'extrem schwach' },
+  { factor: 0.6, label: 'sehr schwach' },
+  { factor: 0.7, label: 'schwach' },
+  { factor: 0.8, label: 'normal' },
+  { factor: 0.9, label: 'stark' },
+  { factor: 0.96, label: 'sehr stark' },
+  { factor: 1.0, label: 'stark wie selbst trainiert' },
+  { factor: 1.1, label: 'stärker als trainiert'},
+  { factor: 1.2, label: 'stärker als die Polizei erlaubt'}
+];
+
+/** Index der Stärke-Stufe, die factor am nächsten liegt. */
+export const strengthIndex = (factor) => LEVEL_STAT_STRENGTHS.reduce((best, x, i) =>
+  (Math.abs(x.factor - factor) < Math.abs(LEVEL_STAT_STRENGTHS[best].factor - factor) ? i : best), 0);
+
+/** "stark" – oder Prozentwert, falls factor keiner Stufe entspricht. */
+export function strengthLabel(factor) {
+  const s = LEVEL_STAT_STRENGTHS[strengthIndex(factor)];
+  return Math.abs(s.factor - factor) < 1e-6 ? s.label : `${Math.round(factor * 100)} %`;
+}
+
+/** Entwicklungslevel der durchlaufenen Stufen; unbekannt (z.B. Stein) → Startlevel der Vorstufe. */
+function evolutionLevels(info) {
+  const evo = info.evo || {};
+  if (!evo.stage || !evo.pre) return [];
+  let at = 0;
+  return [evo.firstLevel, evo.secondLevel].slice(0, evo.stage).map((lv) => (at = Math.max(lv || startLevel(evo.pre), at)));
+}
+
+/**
+ * Erwartete Statsumme (KP ohne Multiplikator) eines per Levelup trainierten Pokémon dieser Art:
+ * Spielformel auf dem Startlevel + 2 Würfe je weiterem Level + gewichtete Entwicklungsboni.
+ */
+export function expectedTrainedTotal(pk, info, settings) {
+  const l0 = Math.min(pk.level, startLevel(info));
+  const start = initialStats(info, l0, { ...settings, hpMultiplier: 1 });
+  const die = expectedDie(effectiveDice(pk, info, settings), settings.rerollOnes);
+  const evoRolls = evolutionLevels(info)
+    .filter((lv) => lv <= pk.level)
+    .reduce((sum, lv) => sum + STATS.length * evolutionRollCount(lv), 0);
+  const base = Object.values(start).reduce((a, b) => a + b, 0);
+  return base + (2 * (pk.level - l0) + evoRolls * settings.levelStatEvoShare) * die;
+}
+
+/**
+ * Erwartete Würfe je Levelup (2 Würfe): Zufall trifft jeden Stat mit 1/6, die Primärwahl
+ * bekommt den zweiten Wurf, außer der Zufall hat sie schon getroffen → dann die Sekundärwahl.
+ * Primär 1, Sekundär 1/3, übrige je 1/6. Ohne Sekundärwahl bleibt der Wurf bei der Primärwahl.
+ */
+function levelUpShares([primary, secondary] = []) {
+  const share = Object.fromEntries(STATS.map((s) => [s, 1 / 6]));
+  if (primary) {
+    share[primary] += 5 / 6;
+    share[secondary || primary] += 1 / 6;
+  }
+  return share;
+}
+
+/**
+ * Neue Statuswerte passend zum Level (ändert pk nicht → auch als Vorschau nutzbar).
+ * Summe = erwartete Summe eines trainierten Pokémon × factor (Stärke).
+ * focusShare der Punkte wird wie bei Levelups auf Stat 1 (Primär) und Stat 2 (Sekundär) verteilt,
+ * der Rest nach Spielformel (Basiswerte). Fehlende Optionen → levelStat*-Werte aus den Einstellungen.
+ */
+export function levelStats(pk, info, settings, { factor, focus = [], evoShare, focusShare } = {}) {
+  const evo = { ...settings, levelStatEvoShare: evoShare ?? settings.levelStatEvoShare };
+  const total = expectedTrainedTotal(pk, info, evo) * (factor ?? settings.levelStatFactor);
+  const focusPart = focus.some(Boolean) ? total * (focusShare ?? settings.levelStatFocusShare) : 0;
+  const lv = pk.level;
+  const weight = Object.fromEntries(STATS.map((s) => {
+    const core = (2 * info.base[s] * lv) / 100;
+    return [s, s === 'hp' ? core + lv + 10 : core + 5];
+  }));
+  const sum = Object.values(weight).reduce((a, b) => a + b, 0);
+  const shares = levelUpShares(focus.filter(Boolean));
+  return Object.fromEntries(STATS.map((s) => {
+    const points = ((total - focusPart) * weight[s]) / sum + (focusPart * shares[s]) / 2;
+    return [s, Math.max(1, Math.round(points)) * multiplierFor(s, settings)];
+  }));
+}
+
+/** Ersetzt die Statuswerte durch levelStats() – mit Protokolleintrag, über undoLevelUp() rückgängig. */
+export function adjustToLevel(pk, info, settings, options = {}) {
+  const snapshot = { stats: { ...pk.stats }, currentHp: pk.currentHp };
+  const focusUsed = (options.focus || []).filter(Boolean).slice(0, 2);
+  const factor = options.factor ?? settings.levelStatFactor;
+  const evoShare = options.evoShare ?? settings.levelStatEvoShare;
+  const focusShare = focusUsed.length ? options.focusShare ?? settings.levelStatFocusShare : 0;
+  pk.stats = levelStats(pk, info, settings, { factor, focus: focusUsed, evoShare, focusShare });
+  pk.currentHp = pk.stats.hp;
+  const entry = {
+    type: 'adjust',
+    at: new Date().toISOString(),
+    from: pk.level,
+    to: pk.level,
+    factor,
+    focus: focusUsed,
+    focusShare,
+    evoShare,
+    changes: STATS.map((stat) => ({ stat, before: snapshot.stats[stat], after: pk.stats[stat] })),
     snapshot,
   };
   pk.levelLog.push(entry);

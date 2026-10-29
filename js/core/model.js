@@ -22,6 +22,9 @@ const pokemonDefaults = () => ({
   currentHp: 0,
   accuracy: null,      // null = beim Öffnen aus Regel berechnen
   evasion: null,
+  // Daggerheart-Traits – reine Eingabefelder wie auf dem Trainerbogen
+  traits: { agility: 0, strength: 0, finesse: 0, instinct: 0, presence: 0, knowledge: 0 },
+  traitMarks: {},
   unlocked: false,     // true = untypische Änderungen (Typen, Fähigkeiten, Attacken, Würfelklasse …) erlaubt
   levelUp: { primary: 'hp', secondary: 'attack', diceOverride: null },
   levelLog: [],
@@ -42,6 +45,7 @@ export function normalizePokemon(pk) {
   const d = pokemonDefaults();
   const out = { ...d, ...pk };
   out.stats = { ...d.stats, ...pk.stats };
+  out.traits = { ...d.traits, ...pk.traits };
   out.levelUp = { ...d.levelUp, ...pk.levelUp };
   out.battle = { ...d.battle, ...pk.battle, mods: { ...d.battle.mods, ...pk.battle?.mods } };
   while (out.moves.length < 4) out.moves.push(null);

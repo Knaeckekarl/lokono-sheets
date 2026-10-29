@@ -28,6 +28,13 @@ export function roll(notation, options) {
   return { notation, dice, total: dice.reduce((s, d) => s + d.value, 0) };
 }
 
+/** Erwartungswert eines Wurfs, z.B. "1W6" → 3,5 (mit 1er-Reroll: Mittel von 2…6 = 4). */
+export function expectedDie(notation, rerollOnes = true) {
+  const { count, sides } = parseDice(notation);
+  const mean = rerollOnes && sides > 1 ? (sides + 2) / 2 : (sides + 1) / 2;
+  return count * mean;
+}
+
 /** "2W6: [1→1→4] + [5] = 9" – gestrichene 1en bleiben sichtbar. */
 export function formatRoll(r) {
   const parts = r.dice.map((d) => `[${d.faces.join('→')}]`);
