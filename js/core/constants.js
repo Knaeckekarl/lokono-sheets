@@ -22,7 +22,7 @@ export const TYPES = {
 };
 
 // Reihenfolge wie auf dem Bogen; speed wird als "Initiative" angezeigt.
-export const STATS = ['hp', 'speed', 'attack', 'defense', 'spAttack', 'spDefense'];
+export const STATS = ['hp', 'attack', 'defense', 'spAttack', 'spDefense', 'speed'];
 export const STAT_LABELS = {
   hp: 'KP',
   speed: 'Initiative',

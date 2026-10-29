@@ -120,19 +120,11 @@ export async function render(app, uuid) {
       <div class="dh-traits pk-traits">
         <div class="acc-eva">
           <div class="acc-eva-shields">
-            <label class="shield"><span class="shield-extra">&nbsp;</span><input type="number" data-f="accuracy" data-t="num" data-rerender value="${pk.accuracy}"><small>ACCURACY</small></label>
             <label class="shield" title="In Klammern: tatsächlicher Abwehrwert (Evasion + 10)"><span class="shield-extra">(${(pk.evasion ?? 0) + 10})</span><input type="number" data-f="evasion" data-t="num" data-rerender value="${pk.evasion}"><small>EVASION</small></label>
+            <label class="shield"><span class="shield-extra">&nbsp;</span><input type="number" data-f="accuracy" data-t="num" data-rerender value="${pk.accuracy}"><small>ACCURACY</small></label>
           </div>
         </div>
         <div class="pk-traits-main">
-          <div class="stat-row dh-trait-row">
-            ${TRAINER_TRAITS.map(([k, label, sub]) => `
-              <div class="trait">
-                <div class="banner">${label}<input type="checkbox" data-f="traitMarks.${k}" ${pk.traitMarks[k] ? 'checked' : ''} title="markiert"></div>
-                <input type="number" class="trait-val" data-f="traits.${k}" data-t="num" value="${pk.traits[k]}">
-                <small>${sub.replaceAll(' · ', '<br>')}</small>
-              </div>`).join('')}
-          </div>
           <div class="stat-row pk-stat-row">
             ${STATS.map((s) => `
               <label class="trait">
@@ -140,6 +132,14 @@ export async function render(app, uuid) {
                 <input type="number" min="0" class="trait-val" data-f="stats.${s}" data-t="num" data-rerender value="${pk.stats[s]}">
                 <small>Basis ${info.base[s]}</small>
               </label>`).join('')}
+          </div>
+          <div class="stat-row dh-trait-row">
+            ${TRAINER_TRAITS.map(([k, label, sub]) => `
+              <div class="trait">
+                <div class="banner">${label}<input type="checkbox" data-f="traitMarks.${k}" ${pk.traitMarks[k] ? 'checked' : ''} title="markiert"></div>
+                <input type="number" class="trait-val" data-f="traits.${k}" data-t="num" value="${pk.traits[k]}">
+                <small>${sub.replaceAll(' · ', '<br>')}</small>
+              </div>`).join('')}
           </div>
         </div>
         <div class="lvl-panel">

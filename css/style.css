@@ -291,10 +291,10 @@ label { display: inline-flex; align-items: center; gap: 6px; }
 .ab-tag.new { color: var(--up); }
 .ab-tag.custom { color: var(--warn); }
 
-/* Werte-Block Pokémon: Accuracy/Evasion als eigene Spalte, rechts Daggerheart-Traits über den Statuswerten, Level & Erfahrung darunter in voller Breite */
-.pk-traits { align-items: flex-end; flex-wrap: wrap; }
-.acc-eva { display: flex; flex-direction: column; gap: 8px; align-items: center; flex: none; align-self: center; }
-.acc-eva-shields { display: flex; gap: 10px; }
+/* Werte-Block Pokémon: Accuracy/Evasion als eigene Spalte, rechts Statuswerte über den Daggerheart-Traits, Level & Erfahrung darunter in voller Breite */
+.pk-traits { align-items: flex-start; flex-wrap: wrap; }
+.acc-eva { display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center; flex: none; align-self: stretch; padding-right: 14px; border-right: 1px solid var(--dh-soft); }
+.acc-eva-shields { display: flex; flex-direction: column; gap: 18px; } /* Evasion oben, Accuracy darunter; Abstand wegen überstehendem Label */
 .shield-extra { font-size: .8rem; font-weight: 700; color: var(--muted); line-height: 1; margin-top: 6px; }
 .pt-open { border: 1px dashed var(--hope-on); background: color-mix(in srgb, var(--hope-on) 15%, var(--btn)); }
 .pt-row { align-items: center; margin: 6px 0; }
@@ -307,8 +307,8 @@ label { display: inline-flex; align-items: center; gap: 6px; }
 .stat-row { display: flex; flex-wrap: wrap; gap: 10px; }
 @media (max-width: 900px) { .pk-traits-main { flex-basis: 100%; } }
 
-/* Pokémon-Statuswerte unter den Daggerheart-Werten */
-.pk-stat-row { padding-top: 8px; border-top: 1px dashed var(--dh-soft); }
+/* Daggerheart-Werte unter den Pokémon-Statuswerten */
+.pk-traits-main .dh-trait-row { padding-top: 8px; border-top: 1px dashed var(--dh-soft); }
 
 /* Stats an Level angleichen */
 .adj-table { border-collapse: collapse; margin: 10px 0; }
