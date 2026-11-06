@@ -381,14 +381,16 @@ function levelUpShares([primary, secondary] = []) {
  * Neue Statuswerte passend zum Level (ändert pk nicht → auch als Vorschau nutzbar).
  * Summe = erwartete Summe eines trainierten Pokémon × factor (Stärke).
  * focusShare der Punkte wird wie bei Levelups auf Stat 1 (Primär) und Stat 2 (Sekundär) verteilt,
- * der Rest nach Spielformel (Basiswerte). Fehlende Optionen → levelStat*-Werte aus den Einstellungen.
+ * der Rest nach Spielformel (Basiswerte) – oder mit balanced gleichmäßig auf alle Stats (Basiswerte ignoriert).
+ * Fehlende Optionen → levelStat*-Werte aus den Einstellungen.
  */
-export function levelStats(pk, info, settings, { factor, focus = [], evoShare, focusShare } = {}) {
+export function levelStats(pk, info, settings, { factor, focus = [], evoShare, focusShare, balanced = false } = {}) {
   const evo = { ...settings, levelStatEvoShare: evoShare ?? settings.levelStatEvoShare };
   const total = expectedTrainedTotal(pk, info, evo) * (factor ?? settings.levelStatFactor);
   const focusPart = focus.some(Boolean) ? total * (focusShare ?? settings.levelStatFocusShare) : 0;
   const lv = pk.level;
   const weight = Object.fromEntries(STATS.map((s) => {
+    if (balanced) return [s, 1];
     const core = (2 * info.base[s] * lv) / 100;
     return [s, s === 'hp' ? core + lv + 10 : core + 5];
   }));
@@ -407,7 +409,8 @@ export function adjustToLevel(pk, info, settings, options = {}) {
   const factor = options.factor ?? settings.levelStatFactor;
   const evoShare = options.evoShare ?? settings.levelStatEvoShare;
   const focusShare = focusUsed.length ? options.focusShare ?? settings.levelStatFocusShare : 0;
-  pk.stats = levelStats(pk, info, settings, { factor, focus: focusUsed, evoShare, focusShare });
+  const balanced = !!options.balanced;
+  pk.stats = levelStats(pk, info, settings, { factor, focus: focusUsed, evoShare, focusShare, balanced });
   pk.currentHp = pk.stats.hp;
   const entry = {
     type: 'adjust',
@@ -418,6 +421,7 @@ export function adjustToLevel(pk, info, settings, options = {}) {
     focus: focusUsed,
     focusShare,
     evoShare,
+    balanced,
     changes: STATS.map((stat) => ({ stat, before: snapshot.stats[stat], after: pk.stats[stat] })),
     snapshot,
   };

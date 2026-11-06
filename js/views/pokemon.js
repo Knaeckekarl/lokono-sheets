@@ -432,6 +432,7 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
       factor: LEVEL_STAT_STRENGTHS[strengthIndex(settings.levelStatFactor)].factor,
       focus: [primary, secondary && secondary !== primary ? secondary : ''],
       focusShare: settings.levelStatFocusShare,
+      balanced: false,
     };
     drawAdjust();
     adjDlg.showModal();
@@ -467,9 +468,12 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
     adjDlg.innerHTML = `
       <form method="dialog" style="${columns}">
         <h3>⚖ Stats an Level ${pk.level} angleichen</h3>
-        <p class="muted small">Gesamtpunkte nach dem Würfelsystem, Verteilung nach den Basiswerten von ${esc(info.de)}
-          und den gewählten Stats.</p>
+        <p class="muted small">Gesamtpunkte nach dem Würfelsystem, Verteilung ${adj.balanced
+          ? 'gleichmäßig auf alle Stats'
+          : `nach den Basiswerten von ${esc(info.de)}`} und den gewählten Stats.</p>
         ${slider('factor', strengthIndex(adj.factor), { max: LEVEL_STAT_STRENGTHS.length - 1, step: 1 })}
+        <label title="Alle Stats bekommen vor der Spezialisierung gleich viele Statpunkte (KP danach ×${settings.hpMultiplier})">
+          <input type="checkbox" name="balanced" ${adj.balanced ? 'checked' : ''}> Ausgeglichen – Basiswerte von ${esc(info.de)} ignorieren</label>
         <hr class="adj-sep">
         ${slider('focusShare', adj.focusShare)}
         <div class="evo-choice">
@@ -478,7 +482,9 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
         </div>
         <p class="muted small">Ändert nur die Verteilung, nicht die Gesamtpunkte. Dieser Anteil wird wie bei Levelups verteilt:
           Stat 1 als Primärwahl (½ davon), Stat 2 als Sekundärwahl (⅙), die übrigen Stats je 1/12.
-          Der Rest folgt den Basiswerten. 0 % = nur Basiswerte, 100 % = wie ein komplett per Levelup trainiertes Pokémon.</p>
+          ${adj.balanced
+            ? 'Der Rest wird gleichmäßig verteilt. 0 % = alle Stats gleich'
+            : 'Der Rest folgt den Basiswerten. 0 % = nur Basiswerte'}, 100 % = wie ein komplett per Levelup trainiertes Pokémon.</p>
         <table class="adj-table">${adjPreview()}</table>
         <p class="muted small">Die Statuswerte werden ersetzt, KP werden aufgefüllt. Lässt sich über „↶ Rückgängig“ zurücknehmen.</p>
         <div class="row wrap">
@@ -506,6 +512,7 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
       if (adj.focus[1] === value) adj.focus[1] = '';
     }
     if (name === 'focus1') adj.focus[1] = value;
+    if (name === 'balanced') adj.balanced = e.target.checked;
     drawAdjust();
   });
 
@@ -828,6 +835,7 @@ function logEntry(e) {
     const pct = (x) => `${Math.round(x * 100)} %`;
     const parts = [
       e.tier ? LEVEL_STAT_TIERS[e.tier] : strengthLabel(e.factor), // e.tier: ältere Einträge mit fester Stufe
+      e.balanced && 'ausgeglichen (Basiswerte ignoriert)',
       e.focus.length && `Spezialisierung ${e.focusShare != null ? `${pct(e.focusShare)} ` : ''}auf ${e.focus.map((s) => STAT_LABELS[s]).join(', ')}`,
       e.evoShare != null && `Entwicklungsboni ${pct(e.evoShare)}`,
     ].filter(Boolean).join(' · ');
