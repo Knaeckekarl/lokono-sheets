@@ -115,6 +115,7 @@ const trainerDefaults = () => ({
   connections: [],      // [{ name, info }]
   badges: Array(8).fill(false),
   team: [],            // [{ uuid, active }] – Reihenfolge & Aktiv/Inaktiv
+  money: 0,
   inventory: '',
   notes: '',
   createdAt: new Date().toISOString(),
