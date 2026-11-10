@@ -121,10 +121,18 @@ export function initialStats(info, level, settings = DEFAULT_SETTINGS) {
  * TODO(Regel): Neue Formel hier eintragen. Bis dahin: Startwert 5, manuell änderbar.
  */
 export function calcAccuracy(info) {
-  return 5;
+  if (info.legendary || info.mythical) {
+    return 5;
+  }
+  const evo = info.evo || {};
+  return 4 - (evo.stage + evo.remaining);
 }
 export function calcEvasion(info) {
-  return 5;
+  if (info.legendary || info.mythical) {
+    return 5;
+  }
+  const evo = info.evo || {};
+  return 4 - (evo.stage + evo.remaining);
 }
 
 // ---------------------------------------------------------------- Kampfwerte (Momentaufnahme)
