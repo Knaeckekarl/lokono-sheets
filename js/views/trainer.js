@@ -156,6 +156,7 @@ export async function render(app, id) {
 
           <section class="dh-sec">
             <h3 class="dh-banner">INVENTORY</h3>
+            <label><small>Pokédollar:</small><input type="number" data-f="money" value="${esc(t.money)}">₽</label>
             <textarea class="lined" data-f="inventory" rows="14">${esc(t.inventory)}</textarea>
           </section>
 
