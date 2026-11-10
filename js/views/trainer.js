@@ -7,7 +7,7 @@ import {
 } from '../core/store.js';
 import {
   pokedexMap, spriteImg, typeBadge, speciesDatalist, parseSpeciesInput, createAndSavePokemon, bindFields,
-  boxTrack, clickTrack,
+  boxTrack, clickTrack, levelInput, parseLevel, bindStartLevel,
 } from './shared.js';
 
 export async function render(app, id) {
@@ -143,6 +143,7 @@ export async function render(app, id) {
             }).join('') || '<p class="muted">Noch keine Pokémon.</p>'}
             <form class="row wrap" id="add-new">
               <input name="species" list="dex-dl" placeholder="Neues Pokémon: Art" required autocomplete="off">
+              ${levelInput()}
               <input name="nickname" placeholder="Spitzname">
               <button>+ Neu</button>
             </form>
@@ -156,7 +157,7 @@ export async function render(app, id) {
 
           <section class="dh-sec">
             <h3 class="dh-banner">INVENTORY</h3>
-            <p class="center">Pokédollar:<input type="textr" inputmode="number" data-f="money" value="${esc(t.money)}">₽</p>
+            <p class="center">Pokédollar:<input type="text" inputmode="numeric" class="money" data-f="money" value="${esc(t.money)}" style="width: calc(${Math.max(String(t.money ?? '').length, 3)}ch + 18px)">₽</p>
             <textarea class="lined" data-f="inventory" rows="14">${esc(t.inventory)}</textarea>
           </section>
 
@@ -187,6 +188,13 @@ export async function render(app, id) {
   };
 
   bindFields(sheet, () => t, { save: saveTrainer, rerender: () => rerenderKeepingFocus(sheet, draw) });
+  bindStartLevel(sheet);
+
+  // Pokédollar-Feld wächst mit der Länge des Betrags
+  sheet.addEventListener('input', (e) => {
+    if (!e.target.classList.contains('money')) return;
+    e.target.style.width = `calc(${Math.max(e.target.value.length, 3)}ch + 18px)`;
+  });
 
   const setTeamFlag = (uuid, active) => {
     const entry = t.team.find((m) => m.uuid === uuid);
@@ -270,7 +278,9 @@ export async function render(app, id) {
     const f = new FormData(e.target);
     const speciesId = await parseSpeciesInput(f.get('species'));
     if (!speciesId) return alert('Pokémon nicht gefunden – bitte aus der Liste wählen.');
-    const pk = await createAndSavePokemon(speciesId, { trainerId: t.id, nickname: f.get('nickname').trim() });
+    const pk = await createAndSavePokemon(speciesId, {
+      trainerId: t.id, nickname: f.get('nickname').trim(), level: parseLevel(f.get('level')),
+    });
     setTeamFlag(pk.uuid, true);
     saveTrainer(t);
     draw();

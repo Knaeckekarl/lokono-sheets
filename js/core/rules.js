@@ -2,6 +2,7 @@
 // (bzw. die Einstellungen in der App, die DEFAULT_SETTINGS überschreiben).
 
 import { roll, expectedDie } from './dice.js';
+import { uid } from './util.js';
 import { STATS, MAX_TYPES, MAX_ABILITIES } from './constants.js';
 
 export const DEFAULT_SETTINGS = {
@@ -220,8 +221,14 @@ export function levelUp(pk, info, settings, { free = false } = {}) {
 export const isBonusLevel = (level, settings = DEFAULT_SETTINGS) =>
   level >= settings.accEvaStart && (level - settings.accEvaStart) % settings.accEvaEvery === 0;
 
-/** Levelups, deren Accuracy/Evasion-Punkt noch nicht vergeben wurde. */
-export const pendingBonusPoints = (pk) => pk.levelLog.filter((e) => e.bonusLevel && !e.bonusPoint);
+/** Punkt-Level bis einschließlich level – für Pokémon, die direkt auf höherem Level angelegt werden. */
+export const missedBonusLevels = (level, settings = DEFAULT_SETTINGS) =>
+  Array.from({ length: Math.max(0, level - settings.accEvaStart + 1) }, (_, i) => settings.accEvaStart + i)
+    .filter((l) => isBonusLevel(l, settings));
+
+/** Levelups (und Start-Punkte aus der Erstellung), deren Accuracy/Evasion-Punkt noch nicht vergeben wurde. */
+export const pendingBonusPoints = (pk) =>
+  [...(pk.startBonus || []), ...pk.levelLog].filter((e) => e.bonusLevel && !e.bonusPoint);
 
 /** Vergibt den Punkt eines Levelups an 'accuracy' oder 'evasion' (wird beim Rückgängigmachen mit zurückgenommen). */
 export function assignBonusPoint(pk, entry, stat) {
@@ -230,6 +237,47 @@ export function assignBonusPoint(pk, entry, stat) {
   pk[stat] = (pk[stat] ?? 0) + 1;
   return true;
 }
+
+// ---------------------------------------------------------------- Orden
+// Jeder Orden kann einen Punkt für Accuracy ODER Evasion geben (Arenaorden immer, eigene optional).
+
+export const ARENAORDEN_COUNT = 8;
+
+export const badgeLabel = (b) => (b.arena ? `Arenaorden ${b.arena}` : b.name || 'Orden');
+
+/** Hängt einen Orden an. Arenaorden geben immer einen Punkt und gibt es pro Pokémon nur einmal. */
+export function addBadge(pk, { arena = null, name = '', grantsPoint = true } = {}) {
+  if (arena && pk.badges.some((b) => b.arena === arena)) return null;
+  const badge = { id: uid('bd'), arena: arena || null, name: arena ? '' : name.trim(), grantsPoint: arena ? true : !!grantsPoint, point: null };
+  pk.badges.push(badge);
+  return badge;
+}
+
+/** Orden, deren Accuracy/Evasion-Punkt noch nicht vergeben wurde. */
+export const pendingBadgePoints = (pk) => pk.badges.filter((b) => b.grantsPoint && !b.point);
+
+export function assignBadgePoint(pk, badge, stat) {
+  if (!badge.grantsPoint || badge.point || !['accuracy', 'evasion'].includes(stat)) return false;
+  badge.point = stat;
+  pk[stat] = (pk[stat] ?? 0) + 1;
+  return true;
+}
+
+/** Entfernt einen Orden und nimmt seinen vergebenen Punkt zurück. */
+export function removeBadge(pk, id) {
+  const i = pk.badges.findIndex((b) => b.id === id);
+  if (i < 0) return null;
+  const [badge] = pk.badges.splice(i, 1);
+  if (badge.point) pk[badge.point] -= 1;
+  return badge;
+}
+
+/** Arenaorden-Nummern, die der Trainer hat und das Pokémon noch nicht. */
+export const availableArenaorden = (pk, trainer) =>
+  trainer
+    ? Array.from({ length: ARENAORDEN_COUNT }, (_, i) => i + 1)
+      .filter((n) => trainer.badges[n - 1] && !pk.badges.some((b) => b.arena === n))
+    : [];
 
 /** Macht den letzten Protokolleintrag (Levelup oder Entwicklung) exakt rückgängig. */
 export function undoLevelUp(pk) {
@@ -241,6 +289,21 @@ export function undoLevelUp(pk) {
 }
 
 // ---------------------------------------------------------------- Entwicklung
+
+/**
+ * Mindestlevel einer Entwicklungsbedingung ("Lv 30", "Lv 20, nachts", "Lv 36 oder Eisstein" …).
+ * null = kein Level nötig – z.B. Stein/Tausch, oder eine "oder"-Variante ohne Level.
+ */
+export function evoLevelReq(cond) {
+  const levels = String(cond || '').split(' oder ').map((v) => /Lv (\d+)/.exec(v)?.[1]);
+  return levels.some((l) => l == null) ? null : Math.min(...levels.map(Number));
+}
+
+/** Ist die Level-Bedingung erfüllt? (Andere Bedingungen kann das Tool nicht prüfen → gelten als erfüllt.) */
+export const evoLevelMet = (pk, cond) => {
+  const req = evoLevelReq(cond);
+  return req == null || pk.level >= req;
+};
 
 /** Anzahl Bonuswürfe pro Statuswert: Lv 1–10 → 1, 11–20 → 2, … (wie auf der alten Seite) */
 export const evolutionRollCount = (level) => Math.max(1, Math.ceil(level / 10));

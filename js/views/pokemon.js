@@ -6,12 +6,13 @@ import {
 } from '../core/constants.js';
 import { getSpecies, getMoves, getAbilities } from '../core/data.js';
 import {
-  getPokemon, savePokemon, deletePokemon, listPokemon, listTrainers, getSettings, bundle,
+  getPokemon, savePokemon, deletePokemon, listPokemon, listTrainers, getTrainer, getSettings, bundle,
 } from '../core/store.js';
 import {
   diceClassFor, effectiveDice, expForNextLevel, possibleLevelUps, levelUp, undoLevelUp,
   calcAccuracy, calcEvasion, BATTLE_STATS, battleValue, heal,
   evolve, evolutionRollCount, mapAbilities, pendingBonusPoints, assignBonusPoint,
+  evoLevelReq, evoLevelMet, badgeLabel, addBadge, pendingBadgePoints, assignBadgePoint, removeBadge, availableArenaorden,
   LEVEL_STAT_TIERS, LEVEL_STAT_STRENGTHS, strengthIndex, strengthLabel, levelStats, adjustToLevel,
 } from '../core/rules.js';
 import { describeMoveEffects } from '../core/effects.js';
@@ -62,12 +63,15 @@ export async function render(app, uuid) {
     const custom = isCustomForm(pk, info);
     const twin = listPokemon().find((p) => p.uuid !== pk.uuid && p.speciesId === pk.speciesId && p.nickname === pk.nickname);
     const lock = pk.unlocked ? '' : 'disabled title="Gesperrt – „Untypische Änderungen erlauben“ aktivieren"';
-    const pending = pendingBonusPoints(pk);
+    const pending = [...pendingBonusPoints(pk), ...pendingBadgePoints(pk)];
+    const trainer = pk.trainerId ? getTrainer(pk.trainerId) : null;
+    const arenaFree = availableArenaorden(pk, trainer);
     // Leuchtet, wenn eine Level-Bedingung ("Lv 30") einer möglichen Entwicklung erfüllt ist
-    const evoReady = (info.evo?.next || []).some((n) => {
-      const m = /Lv (\d+)/.exec(n.cond);
-      return m && pk.level >= +m[1];
-    });
+    const evoNext = info.evo?.next || [];
+    const evoReady = evoNext.some((n) => evoLevelReq(n.cond) != null && evoLevelMet(pk, n.cond));
+    // Gesperrt, solange KEINE Entwicklung ihre Level-Bedingung erfüllt (Stein, Tausch … gelten als erfüllt)
+    const evoBlocked = evoNext.length > 0 && evoNext.every((n) => !evoLevelMet(pk, n.cond));
+    const evoMinLv = evoBlocked ? Math.min(...evoNext.map((n) => evoLevelReq(n.cond))) : null;
     const hpPct = pk.stats.hp ? Math.max(0, Math.min(100, (pk.currentHp / pk.stats.hp) * 100)) : 0;
 
     sheet.style.setProperty('--accent', `var(--t-${pk.types[0] || 'normal'})`);
@@ -165,10 +169,34 @@ export async function render(app, uuid) {
             <button data-act="levelup-free" ${pk.level < 100 ? '' : 'disabled'} title="Level ohne EXP-Kosten, z.B. vom Spielleiter">+1 Level ohne EXP</button>
             <button data-act="adjust" title="Statuswerte nach Spielformel neu setzen (schwach / normal / stark / spezialisiert)">⚖ Stats an Level angleichen</button>
             <button data-act="undo" ${pk.levelLog.length ? '' : 'disabled'} title="Letzten Protokolleintrag (Levelup, Entwicklung, Angleichen) rückgängig machen">↶ Rückgängig</button>
-            ${info.evo?.next?.length || pk.unlocked ? `<button data-act="evolve" class="evo-btn ${evoReady ? 'ready' : ''}"
-              title="${evoReady ? 'Level-Bedingung für eine Entwicklung erfüllt' : info.evo?.next?.length ? 'Entwicklung auswählen' : 'Custom-Entwicklung zu einer frei gewählten Art'}">✨ Entwickeln</button>` : ''}
-            ${pending.length ? `<button data-act="points" class="pt-open" title="Ab Lv ${settings.accEvaStart} alle ${settings.accEvaEvery} Level: +1 Accuracy oder Evasion">🎯 ${pending.length} Punkt${pending.length > 1 ? 'e' : ''} für Accuracy/Evasion offen</button>` : ''}
+            ${evoNext.length || pk.unlocked ? `<button data-act="evolve" class="evo-btn ${evoReady ? 'ready' : ''}" ${evoBlocked && !pk.unlocked ? 'disabled' : ''}
+              title="${evoBlocked ? `Entwicklung erst ab Lv ${evoMinLv}` : evoReady ? 'Level-Bedingung für eine Entwicklung erfüllt' : evoNext.length ? 'Entwicklung auswählen' : 'Custom-Entwicklung zu einer frei gewählten Art'}">✨ Entwickeln</button>` : ''}
+            ${evoBlocked ? pk.unlocked
+              ? `<span class="evo-hint untypical small">🔓 Entwicklung vor Lv ${evoMinLv} – untypisch</span>`
+              : `<span class="evo-hint small">Entwicklung ab Lv ${evoMinLv} · mit „🔓 Untypische Änderungen erlauben“ schon früher möglich</span>` : ''}
+            ${pending.length ? `<button data-act="points" class="pt-open" title="Ab Lv ${settings.accEvaStart} alle ${settings.accEvaEvery} Level und je Orden: +1 Accuracy oder Evasion">🎯 ${pending.length} Punkt${pending.length > 1 ? 'e' : ''} für Accuracy/Evasion offen</button>` : ''}
             <span class="muted small">${possible ? `${possible} Levelup${possible > 1 ? 's' : ''} möglich · ` : ''}Würfel ${effectiveDice(pk, info, settings)} · ${settings.rerollOnes ? '1en werden neu gewürfelt' : '1en zählen'} · KP ×${settings.hpMultiplier} · Initiative ×${settings.speedMultiplier}</span>
+          </div>
+        </div>
+        <div class="lvl-panel badge-panel">
+          <span class="banner">ORDEN</span>
+          <div class="badge-list">
+            ${pk.badges.map((b) => `
+              <span class="badge-chip ${b.arena ? 'arena' : ''}">🏅 ${esc(badgeLabel(b))}
+                ${b.point ? `<span class="badge-pt">+1 ${b.point === 'accuracy' ? 'Acc' : 'Eva'}</span>`
+                  : b.grantsPoint ? '<span class="badge-pt open">Punkt offen</span>' : ''}
+                <button class="mini" data-act="del-badge" data-id="${esc(b.id)}" title="Orden entfernen">×</button>
+              </span>`).join('') || '<span class="muted small">Noch keine Orden.</span>'}
+          </div>
+          <div class="row wrap">
+            ${!trainer ? '<span class="muted small">Arenaorden gibt es nur mit Trainer.</span>'
+              : arenaFree.length ? `
+                <select id="arena-sel" aria-label="Arenaorden">${arenaFree.map((n) => `<option value="${n}">Arenaorden ${n}</option>`).join('')}</select>
+                <button data-act="add-arena">+ Arenaorden</button>`
+              : `<span class="muted small">${esc(trainer.name || 'Der Trainer')} hat keine weiteren Orden.</span>`}
+            <input id="badge-name" placeholder="Eigener Orden" aria-label="Name des eigenen Ordens">
+            <label title="Dieser Orden gibt +1 Accuracy oder Evasion"><input type="checkbox" id="badge-pt" checked> +1 Acc/Eva</label>
+            <button data-act="add-badge">+ Orden</button>
           </div>
         </div>
       </div>
@@ -351,6 +379,25 @@ export async function render(app, uuid) {
         openPoints();
         return 'navigated';
       },
+      'add-arena'() {
+        const n = +sheet.querySelector('#arena-sel')?.value;
+        if (n) addBadge(pk, { arena: n });
+      },
+      'add-badge'() {
+        const input = sheet.querySelector('#badge-name');
+        if (!input.value.trim()) {
+          input.focus();
+          return 'navigated';
+        }
+        addBadge(pk, { name: input.value, grantsPoint: sheet.querySelector('#badge-pt').checked });
+      },
+      'del-badge'() {
+        const b = pk.badges.find((x) => x.id === d.id);
+        if (!b) return 'navigated';
+        const pt = b.point ? `\nDer vergebene Punkt (+1 ${b.point === 'accuracy' ? 'Accuracy' : 'Evasion'}) wird zurückgenommen.` : '';
+        if (!confirm(`${badgeLabel(b)} entfernen?${pt}`)) return 'navigated';
+        removeBadge(pk, b.id);
+      },
       export() {
         downloadJson(`Pokemon_${safeName(pk.nickname || info.de)}_Lv${pk.level}_${today()}.json`, bundle({ pokemon: [pk] }));
       },
@@ -371,14 +418,13 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
         return 'navigated';
       },
     };
-    const pendingBefore = pendingBonusPoints(pk).length;
+    const openCount = () => pendingBonusPoints(pk).length + pendingBadgePoints(pk).length;
+    const pendingBefore = openCount();
     if (!actions[act] || actions[act]() === 'navigated') return;
     save(pk);
     draw();
-    if (act.startsWith('levelup')) {
-      sheet.querySelector('.level-log li')?.classList.add('flash');
-      if (pendingBonusPoints(pk).length > pendingBefore) openPoints(); // neuer Punkt → direkt fragen
-    }
+    if (act.startsWith('levelup')) sheet.querySelector('.level-log li')?.classList.add('flash');
+    if (openCount() > pendingBefore) openPoints(); // neuer Punkt (Levelup oder Orden) → direkt fragen
   });
 
   // ---------------------------------------------------------------- Accuracy/Evasion-Punkte
@@ -386,18 +432,21 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
 
   function openPoints() {
     const open = pendingBonusPoints(pk);
-    if (!open.length) return;
+    const openBadges = pendingBadgePoints(pk);
+    if (!open.length && !openBadges.length) return;
+    const choice = (name, title) => `
+          <div class="evo-choice pt-row">
+            <b>${title}</b>
+            <label class="chip"><input type="radio" name="${name}" value="accuracy"> +1 Accuracy <span class="muted">(${pk.accuracy})</span></label>
+            <label class="chip"><input type="radio" name="${name}" value="evasion"> +1 Evasion <span class="muted">(${pk.evasion}, Abwehr ${(pk.evasion ?? 0) + 10})</span></label>
+          </div>`;
     ptDlg.innerHTML = `
       <form method="dialog">
         <h3>🎯 Punkt für Accuracy oder Evasion</h3>
-        <p class="muted small">Ab Level ${settings.accEvaStart} gibt es alle ${settings.accEvaEvery} Level einen Punkt.
+        <p class="muted small">Ab Level ${settings.accEvaStart} gibt es alle ${settings.accEvaEvery} Level einen Punkt, dazu einen je Orden.
           Erhöhungen durch Story-Ereignisse trägst du einfach direkt im Feld ein.</p>
-        ${open.map((e) => `
-          <div class="evo-choice pt-row">
-            <b>Lv ${e.bonusLevel}</b>
-            <label class="chip"><input type="radio" name="pt-${e.bonusLevel}" value="accuracy"> +1 Accuracy <span class="muted">(${pk.accuracy})</span></label>
-            <label class="chip"><input type="radio" name="pt-${e.bonusLevel}" value="evasion"> +1 Evasion <span class="muted">(${pk.evasion}, Abwehr ${(pk.evasion ?? 0) + 10})</span></label>
-          </div>`).join('')}
+        ${open.map((e, i) => choice(`pt-${i}`, `Lv ${e.bonusLevel}`)).join('')}
+        ${openBadges.map((b) => choice(`bd-${b.id}`, `🏅 ${esc(badgeLabel(b))}`)).join('')}
         <div class="row wrap">
           <button value="cancel">Später entscheiden</button>
           <button value="ok" class="primary">Übernehmen</button>
@@ -409,9 +458,14 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
   ptDlg.addEventListener('submit', (e) => {
     if (e.submitter?.value !== 'ok') return;
     const form = new FormData(e.target);
-    for (const entry of pendingBonusPoints(pk)) {
-      const stat = form.get(`pt-${entry.bonusLevel}`);
+    // Reihenfolge wie im Dialog (Start-Punkte, dann Levelups) – Index statt Level, da Level doppelt vorkommen können
+    pendingBonusPoints(pk).forEach((entry, i) => {
+      const stat = form.get(`pt-${i}`);
       if (stat) assignBonusPoint(pk, entry, stat); // nicht gewählte bleiben offen
+    });
+    for (const badge of pendingBadgePoints(pk)) {
+      const stat = form.get(`bd-${badge.id}`);
+      if (stat) assignBadgePoint(pk, badge, stat);
     }
     save(pk);
     draw();
@@ -541,9 +595,11 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
     if (pk.unlocked && !root.querySelector('#evo-dex-dl')) root.insertAdjacentHTML('beforeend', await speciesDatalist('evo-dex-dl'));
     // Ist das Pokémon schon eine Custom-Form, startet der Dialog mit deren Typen
     const custom = isCustomForm(pk, info);
-    const first = targets[0]?.info;
+    // Start auf dem ersten Ziel, dessen Level-Bedingung erfüllt ist (entsperrt: einfach das erste)
+    const firstOk = pk.unlocked ? 0 : Math.max(0, targets.findIndex((t) => evoLevelMet(pk, t.cond)));
+    const first = targets[firstOk]?.info;
     evo = {
-      targets, index: 0, selected: first ? recommended(first) : pk.abilities.filter(Boolean),
+      targets, index: firstOk, selected: first ? recommended(first) : pk.abilities.filter(Boolean),
       custom, customTypes: custom || !first ? [...pk.types] : [...first.types], formName: pk.formName,
       dice: pk.levelUp.diceOverride ?? '',
     };
@@ -571,13 +627,19 @@ Das kann nicht rückgängig gemacht werden. Tipp: vorher „Export“ als Sicher
     const free = evo.targets.find((t) => t.free);
     const targetList = `
         <div class="evo-targets">
-          ${evo.targets.map((t, i) => `
-            <label class="evo-opt ${i === evo.index ? 'on' : ''}">
-              <input type="radio" name="target" value="${i}" ${i === evo.index ? 'checked' : ''}>
+          ${evo.targets.map((t, i) => {
+            // Level-Bedingung nicht erreicht: gesperrt – oder mit 🔓 als untypische Entwicklung wählbar
+            const levelOk = t.free || evoLevelMet(pk, t.cond);
+            const blocked = !levelOk && !pk.unlocked;
+            const note = levelOk ? '' : blocked ? ` · noch nicht erreicht (Lv ${pk.level})` : ` · 🔓 vor Lv ${evoLevelReq(t.cond)} (untypisch)`;
+            return `
+            <label class="evo-opt ${i === evo.index ? 'on' : ''} ${blocked ? 'blocked' : ''}">
+              <input type="radio" name="target" value="${i}" ${i === evo.index ? 'checked' : ''} ${blocked ? 'disabled' : ''}>
               ${spriteImg(t.info.id, { shiny: pk.shiny, size: 56 })}
               <span><b>${esc(t.info.de)}</b> ${t.info.types.map(typeBadge).join('')}<br>
-                <small class="muted">${t.free ? '🔓 Custom-Entwicklung' : `Bedingung im Spiel: ${esc(t.cond)}`}</small></span>
-            </label>`).join('')}
+                <small class="muted">${t.free ? '🔓 Custom-Entwicklung' : `Bedingung im Spiel: ${esc(t.cond)}${note}`}</small></span>
+            </label>`;
+          }).join('')}
           ${pk.unlocked ? `
             <label class="evo-opt evo-free">🔓 Andere Art:
               <input name="freeTarget" list="evo-dex-dl" value="${free ? esc(`${free.info.de} #${free.info.id}`) : ''}" placeholder="Art suchen …" autocomplete="off">

@@ -7,6 +7,7 @@ import { createTrainer } from '../core/model.js';
 import { migrate } from '../core/migrate.js';
 import {
   pokedexMap, spriteImg, typeBadge, speciesDatalist, parseSpeciesInput, createAndSavePokemon,
+  levelInput, parseLevel, bindStartLevel,
 } from './shared.js';
 
 export async function render(app) {
@@ -59,6 +60,7 @@ export async function render(app) {
       <div class="row between"><h2>Pokémon</h2><input id="pk-filter" type="search" placeholder="Suchen (Spitzname, Art, Trainer)"></div>
       <form id="new-pk" class="row wrap">
         <input name="species" list="dex-dl" placeholder="Art, z.B. Kanivanha" required autocomplete="off">
+        ${levelInput()}
         <input name="nickname" placeholder="Spitzname (empfohlen)">
         <select name="trainer" id="new-trainer-select"></select>
         <button>+ Pokémon erstellen</button>
@@ -81,6 +83,7 @@ export async function render(app) {
   draw();
 
   root.querySelector('#pk-filter').addEventListener('input', draw);
+  bindStartLevel(root);
 
   root.querySelector('#new-pk').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -90,7 +93,7 @@ export async function render(app) {
     const nickname = f.get('nickname').trim();
     const twin = listPokemon().find((p) => p.speciesId === id && p.nickname === nickname);
     if (twin && !confirm(`Es gibt bereits ein ${dex.get(id).de} mit ${nickname ? `Spitzname „${nickname}“` : 'ohne Spitzname'}. Trotzdem anlegen?`)) return;
-    const pk = await createAndSavePokemon(id, { nickname, trainerId: f.get('trainer') || null });
+    const pk = await createAndSavePokemon(id, { nickname, trainerId: f.get('trainer') || null, level: parseLevel(f.get('level')) });
     location.hash = `#/pokemon/${pk.uuid}`;
   });
 

@@ -20,6 +20,8 @@
     import {
       DEFAULT_SETTINGS, diceClassFor, levelUp, undoLevelUp, expForNextLevel, possibleLevelUps, battleValue, heal,
       evolve, evolutionRollCount, mapAbilities, pendingBonusPoints, assignBonusPoint, isBonusLevel,
+      badgeLabel, addBadge, pendingBadgePoints, assignBadgePoint, removeBadge, availableArenaorden,
+      missedBonusLevels, initialStats, evoLevelReq, evoLevelMet,
       levelStats, adjustToLevel, expectedTrainedTotal, strengthLabel,
     } from '../js/core/rules.js';
     import { getSpecies, getMoves } from '../js/core/data.js';
@@ -126,8 +128,49 @@
       undoLevelUp(pk); undoLevelUp(pk);
       eq(pk.evasion, eva, 'Rückgängig nimmt Punkt zurück'); eq(pk.level, 9);
     });
+    await test('Erstellen auf höherem Level: verpasste Accuracy/Evasion-Punkte', async () => {
+      eq(missedBonusLevels(27), [10, 15, 20, 25]); eq(missedBonusLevels(10), [10]); eq(missedBonusLevels(9), []);
+      const info = await getSpecies(318);
+      const pk = createPokemon(info, DEFAULT_SETTINGS, { level: 27 });
+      eq(pk.level, 27); eq(pk.stats, initialStats(info, 27, DEFAULT_SETTINGS), 'Spielformel-Stats');
+      eq(pendingBonusPoints(pk).map((e) => e.bonusLevel), [10, 15, 20, 25]);
+      const acc = pk.accuracy;
+      ok(assignBonusPoint(pk, pendingBonusPoints(pk)[0], 'accuracy')); eq(pk.accuracy, acc + 1);
+      eq(pendingBonusPoints(pk).length, 3);
+      levelUp(pk, info, DEFAULT_SETTINGS, { free: true }); undoLevelUp(pk);
+      eq(pk.startBonus.length, 4, 'Rückgängig lässt Start-Punkte stehen'); eq(pendingBonusPoints(pk).length, 3);
+      eq(pendingBonusPoints(createPokemon(info, DEFAULT_SETTINGS, { level: 9 })).length, 0);
+    });
+    await test('Orden: Arenaorden + eigene, Accuracy/Evasion-Punkt', async () => {
+      const pk = createPokemon(await getSpecies(318), DEFAULT_SETTINGS, { level: 20 });
+      const eva = pk.evasion;
+      const trainer = { badges: [true, false, true, false, false, false, false, false] };
+      eq(availableArenaorden(pk, trainer), [1, 3], 'nur vom Trainer errungene');
+      eq(availableArenaorden(pk, null), [], 'ohne Trainer keine');
+      const a = addBadge(pk, { arena: 1, grantsPoint: false });
+      eq(badgeLabel(a), 'Arenaorden 1'); ok(a.grantsPoint, 'Arenaorden gibt immer einen Punkt');
+      eq(addBadge(pk, { arena: 1 }), null, 'kein doppelter Arenaorden');
+      eq(availableArenaorden(pk, trainer), [3]);
+      eq(pendingBadgePoints(pk).length, 1);
+      ok(assignBadgePoint(pk, a, 'evasion')); eq(pk.evasion, eva + 1);
+      ok(!assignBadgePoint(pk, a, 'accuracy'), 'nur einmal vergebbar');
+      const c = addBadge(pk, { name: ' Sieg im Turnier ', grantsPoint: false });
+      eq(badgeLabel(c), 'Sieg im Turnier'); eq(pendingBadgePoints(pk).length, 0, 'eigener Orden ohne Punkt');
+      addBadge(pk, { name: 'Mit Punkt', grantsPoint: true });
+      eq(pendingBadgePoints(pk).length, 1);
+      removeBadge(pk, a.id);
+      eq(pk.evasion, eva, 'Entfernen nimmt Punkt zurück'); eq(pk.badges.length, 2);
+    });
 
     // ---------------- Entwicklung
+    await test('Entwicklung: Level-Bedingung', async () => {
+      eq(evoLevelReq('Lv 30'), 30); eq(evoLevelReq('Lv 20, nachts'), 20);
+      eq(evoLevelReq('Lv 36 oder Eisstein'), null, 'Stein geht immer');
+      eq(evoLevelReq('Donnerstein'), null); eq(evoLevelReq('Tausch'), null);
+      eq(evoLevelReq('Lv 20, Ang > Vert oder Lv 20, Ang < Vert'), 20);
+      ok(!evoLevelMet({ level: 29 }, 'Lv 30') && evoLevelMet({ level: 30 }, 'Lv 30'), 'ab Lv 30');
+      ok(evoLevelMet({ level: 1 }, 'Donnerstein'), 'ohne Level-Bedingung erlaubt');
+    });
     await test('Entwicklungsdaten: Nachfolger mit Bedingung', async () => {
       const next = (await getSpecies(318)).evo.next;
       eq(next, [{ id: 319, cond: 'Lv 30' }]);

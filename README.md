@@ -27,6 +27,10 @@ Es ist eine reine statische Webseite (HTML/CSS/JavaScript ohne Build-Schritt) un
   - bei mehreren möglichen Levelups: **Anzahl auswählbar**
   - **ab Lv 10 alle 5 Level** fragt ein Dialog nach **+1 Accuracy oder +1 Evasion** („Später“ → offener Punkt unter den Schilden);
     Startlevel und Abstand unter „Regeln & Würfel“. Story-Erhöhungen direkt im Feld
+- **Level beim Erstellen** wählbar (Standard: Startlevel der Art, Stats nach Spielformel). Punkte für Accuracy/Evasion
+  der übersprungenen Level (Lv 10, 15, 20 … bis zum Startlevel) stehen danach als offene Punkte bereit
+- **Orden** unter „Level & Erfahrung“: **Arenaorden 1–8** (nur die, die der Trainer errungen hat) und eigene Orden.
+  Jeder Arenaorden gibt **+1 Accuracy oder +1 Evasion**, eigene Orden optional; Entfernen nimmt den Punkt zurück
 - **Evasion** zeigt in Klammern den tatsächlichen Abwehrwert (Evasion + 10)
 - Höchstens **3 Fähigkeiten** pro Pokémon
   - letztes Levelup exakt rückgängig machbar; „+1 Level ohne EXP“ für Spielleiter-Level

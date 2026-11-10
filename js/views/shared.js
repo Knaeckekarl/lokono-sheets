@@ -4,6 +4,7 @@ import { esc, setPath } from '../core/util.js';
 import { TYPES, SPRITE } from '../core/constants.js';
 import { getPokedex, getSpecies, HOMEBREW_ID_START } from '../core/data.js';
 import { createPokemon } from '../core/model.js';
+import { startLevel } from '../core/rules.js';
 import { savePokemon, getSettings } from '../core/store.js';
 
 let dexMap = null;
@@ -47,6 +48,31 @@ export async function parseSpeciesInput(value) {
   if (m && dex.has(+m[1])) return +m[1];
   const v = value.trim().toLowerCase();
   return [...dex.values()].find((p) => p.de.toLowerCase() === v || p.en === v)?.id ?? null;
+}
+
+// ---------------------------------------------------------------- Level beim Erstellen
+
+/** Level-Feld für Erstell-Formulare (leer = Startlevel der Art). */
+export const levelInput = () =>
+  '<input name="level" type="number" min="1" max="100" placeholder="Level" aria-label="Level" title="Level beim Erstellen – Standard: Startlevel der Art" class="new-lvl">';
+
+/** Leeres Feld → null (Startlevel der Art), sonst auf 1–100 begrenzt. */
+export const parseLevel = (value) =>
+  value === '' || value == null || isNaN(+value) ? null : Math.min(100, Math.max(1, Math.round(+value)));
+
+/**
+ * Setzt das Level-Feld eines Formulars auf das Startlevel der Art, sobald im
+ * Art-Feld (name="species") eine bekannte Art steht. Delegiert → übersteht Neuzeichnen.
+ */
+export function bindStartLevel(root) {
+  root.addEventListener('input', async (e) => {
+    const input = e.target;
+    if (input.name !== 'species' || !input.form?.elements.level) return;
+    const id = await parseSpeciesInput(input.value);
+    if (id == null) return;
+    const sp = (await pokedexMap()).get(id);
+    if (sp) input.form.elements.level.value = startLevel(sp);
+  });
 }
 
 export async function createAndSavePokemon(speciesId, opts) {

@@ -3,7 +3,7 @@
 // wenn später neue Felder hinzukommen.
 
 import { uid } from './util.js';
-import { initialStats, startLevel, calcAccuracy, calcEvasion } from './rules.js';
+import { initialStats, startLevel, calcAccuracy, calcEvasion, missedBonusLevels } from './rules.js';
 
 export const FORMAT_VERSION = 1;
 
@@ -28,12 +28,16 @@ const pokemonDefaults = () => ({
   unlocked: false,     // true = untypische Änderungen (Typen, Fähigkeiten, Attacken, Würfelklasse …) erlaubt
   levelUp: { primary: 'hp', secondary: 'attack', diceOverride: null },
   levelLog: [],
+  // Accuracy/Evasion-Punkte aus Leveln vor der Erstellung: [{ bonusLevel, bonusPoint: null | 'accuracy' | 'evasion' }]
+  startBonus: [],
   moves: [null, null, null, null], // Attacken-Slugs (z.B. "ice-fang")
   abilities: [],       // Fähigkeits-Slugs; unbekannte Einträge = eigener Text
   item: '',
   gender: 'neutral',
   shiny: false,
   status: [],
+  // Orden: [{ id, arena: 1–8 | null, name (nur eigene), grantsPoint, point: null | 'accuracy' | 'evasion' }]
+  badges: [],
   // Kampf-Momentaufnahme: mods = Stufen (× Level), initiative = zu Kampfbeginn erwürfelt
   battle: { initiative: null, mods: { attack: 0, defense: 0, spAttack: 0, spDefense: 0, initiative: 0 } },
   notes: '',
@@ -48,6 +52,8 @@ export function normalizePokemon(pk) {
   out.traits = { ...d.traits, ...pk.traits };
   out.levelUp = { ...d.levelUp, ...pk.levelUp };
   out.battle = { ...d.battle, ...pk.battle, mods: { ...d.battle.mods, ...pk.battle?.mods } };
+  out.badges = Array.isArray(pk.badges) ? pk.badges : [];
+  out.startBonus = Array.isArray(pk.startBonus) ? pk.startBonus : [];
   while (out.moves.length < 4) out.moves.push(null);
   delete out.movement;   // Bewegung entfällt (alte Speicherstände)
   delete out.friendship; // Freundschaft entfällt
@@ -64,6 +70,7 @@ export function createPokemon(info, settings, { trainerId = null, nickname = '',
     types: [...info.types],
     level: lv,
     stats,
+    startBonus: missedBonusLevels(lv, settings).map((l) => ({ bonusLevel: l, bonusPoint: null })),
     currentHp: stats.hp,
     accuracy: calcAccuracy(info),
     evasion: calcEvasion(info),
