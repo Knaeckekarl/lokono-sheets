@@ -2,7 +2,7 @@
 
 import { esc, downloadJson, safeName, today, uid, rerenderKeepingFocus } from '../core/util.js';
 import {
-  STATS, STAT_LABELS, MOVE_CATEGORIES, STATUS_EFFECTS, GENDERS, MAX_TYPES, MAX_ABILITIES, TRAINER_TRAITS, defensiveMatchups,
+  STATS, STAT_LABELS, MOVE_CATEGORIES, STATUS_EFFECTS, STATUS_COLORS, GENDERS, MAX_TYPES, MAX_ABILITIES, TRAINER_TRAITS, defensiveMatchups,
 } from '../core/constants.js';
 import { getSpecies, getMoves, getAbilities } from '../core/data.js';
 import {
@@ -55,6 +55,19 @@ export async function render(app, uuid) {
     <dialog id="adj-dlg" class="evo-dlg"></dialog>`;
   const sheet = root.querySelector('#sheet');
   const save = (m) => savePokemon(m);
+
+  // KP-Bruchteil-Regler (x/16 + y/10 der max. KP) – nur Bedienzustand, bleibt beim Neuzeichnen erhalten
+  const hpFrac = { s16: 0, s10: 0 };
+  // Integer-Cutoff auf die Summe, ganzzahlig gerechnet: ⌊maxKP · (a/16 + b/10)⌋ = ⌊maxKP · (10a + 16b) / 160⌋
+  const hpFracAmount = () => Math.floor((pk.stats.hp * (hpFrac.s16 * 10 + hpFrac.s10 * 16)) / 160);
+  const hpFracSum = () => {
+    const pct = (hpFrac.s16 / 16 + hpFrac.s10 / 10) * 100;
+    return `${pct.toLocaleString('de-DE', { maximumFractionDigits: 2 })} %`;
+  };
+  const hpSlider = (key, den, label) => `
+    <label class="hp-slider"><span>${label}</span>
+      <input type="range" data-hpfrac="${key}" data-den="${den}" min="0" max="${den}" step="1" value="${hpFrac[key]}" aria-label="${label} der max. KP">
+      <output>${hpFrac[key]}/${den}</output></label>`;
 
   const draw = () => {
     const dc = diceClassFor(info, settings);
@@ -212,8 +225,21 @@ export async function render(app, uuid) {
               <button class="heal-btn" data-act="heal" title="KP auffüllen, Kampfwerte zurücksetzen, Statusprobleme entfernen">❤ Heilen</button>
             </div>
             <div class="hp-bar ${hpPct <= 25 ? 'low' : hpPct <= 50 ? 'mid' : ''}"><span style="width:${hpPct}%"></span></div>
+            <div class="hp-frac">
+              ${hpSlider('s16', 16, 'Sechzehntel')}
+              ${hpSlider('s10', 10, 'Zehntel')}
+              <div class="row wrap">
+                <span class="hp-frac-sum">${hpFracSum()}</span>
+                <span class="grow"></span>
+                <button class="hp-dmg" data-act="hp-damage" ${hpFracAmount() ? '' : 'disabled'} title="Schaden: KP um diesen Anteil der max. KP senken">− ${hpFracAmount()} KP</button>
+                <button class="hp-heal" data-act="hp-heal" ${hpFracAmount() ? '' : 'disabled'} title="Heilung: KP um diesen Anteil der max. KP erhöhen (höchstens bis Maximum)">+ ${hpFracAmount()} KP</button>
+              </div>
+            </div>
             <div class="row wrap">
-              ${STATUS_EFFECTS.map((s) => `<label class="chip"><input type="checkbox" data-status="${esc(s)}" ${pk.status.includes(s) ? 'checked' : ''}> ${esc(s)}</label>`).join('')}
+              ${STATUS_EFFECTS.map((s) => {
+                const col = STATUS_COLORS[s] || { c: '#777' };
+                return `<label class="chip status-chip" style="--c:${col.c}; --fg:${col.fg || '#fff'}"><input type="checkbox" data-status="${esc(s)}" ${pk.status.includes(s) ? 'checked' : ''}>${esc(s)}</label>`;
+              }).join('')}
             </div>
           </section>
 
@@ -262,6 +288,22 @@ export async function render(app, uuid) {
   };
 
   const redraw = () => rerenderKeepingFocus(sheet, draw);
+
+  // KP-Regler: nur Anzeige in-place aktualisieren, damit der Regler beim Ziehen nicht ersetzt wird
+  sheet.addEventListener('input', (e) => {
+    const el = e.target;
+    if (el.dataset.hpfrac == null) return;
+    hpFrac[el.dataset.hpfrac] = +el.value;
+    el.nextElementSibling.value = `${el.value}/${el.dataset.den}`;
+    const box = el.closest('.hp-frac');
+    const amount = hpFracAmount();
+    box.querySelector('.hp-frac-sum').textContent = hpFracSum();
+    for (const [sel, sign] of [['.hp-dmg', '−'], ['.hp-heal', '+']]) {
+      const btn = box.querySelector(sel);
+      btn.textContent = `${sign} ${amount} KP`;
+      btn.disabled = !amount;
+    }
+  });
 
   bindFields(sheet, () => pk, {
     save: (m) => {
@@ -364,6 +406,12 @@ export async function render(app, uuid) {
       },
       heal() {
         heal(pk);
+      },
+      'hp-damage'() {
+        pk.currentHp = Math.max(0, pk.currentHp - hpFracAmount());
+      },
+      'hp-heal'() {
+        pk.currentHp = Math.min(pk.stats.hp, pk.currentHp + hpFracAmount());
       },
       'battle-reset'() {
         for (const s of BATTLE_STATS) pk.battle.mods[s] = 0;

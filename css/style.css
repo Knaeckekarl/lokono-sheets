@@ -120,6 +120,15 @@ label { display: inline-flex; align-items: center; gap: 6px; }
 .sprite { image-rendering: pixelated; object-fit: contain; }
 .chip { padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: .9em; }
 
+/* Statuseffekte: Farbe statt Häkchen – Checkbox bleibt (unsichtbar) für Tastatur & Screenreader */
+.status-chip { position: relative; cursor: pointer; user-select: none; border: 1.5px solid var(--c); padding: 3px 10px; font-weight: 600;
+  background: color-mix(in srgb, var(--c) 8%, transparent); transition: background-color .12s, color .12s, box-shadow .12s; }
+.status-chip input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+.status-chip:hover { background: color-mix(in srgb, var(--c) 28%, transparent); box-shadow: 0 0 6px color-mix(in srgb, var(--c) 55%, transparent); }
+.status-chip:has(input:checked) { background: var(--c); color: var(--fg); }
+.status-chip:has(input:checked):hover { background: color-mix(in srgb, var(--c) 82%, #000); }
+.status-chip:has(input:focus-visible) { outline: 2px solid var(--c); outline-offset: 2px; }
+
 /* ============================================================ Übersicht */
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
 .tile { display: flex; flex-direction: column; gap: 2px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; text-decoration: none; background: var(--paper); }
@@ -231,6 +240,17 @@ label { display: inline-flex; align-items: center; gap: 6px; }
 .hp-bar.mid span { background: #e0b400; }
 .hp-bar.low span { background: #d23b2b; }
 .heal-btn { margin-left: auto; font-weight: 600; }
+.hp-frac { margin: 4px 0 10px; }
+.hp-slider { display: grid; grid-template-columns: 7.5em minmax(6em, 1fr) 3.5em; align-items: center; gap: 10px; font-weight: 600; }
+.hp-slider input { width: 100%; min-width: 0; margin: 0; accent-color: var(--accent); }
+.hp-slider output { text-align: center; font-variant-numeric: tabular-nums; }
+.hp-frac .row { margin-top: 6px; }
+.hp-frac-sum { font-weight: 700; font-variant-numeric: tabular-nums; }
+button.hp-dmg, button.hp-heal { color: #fff; border-color: transparent; font-weight: 700; font-variant-numeric: tabular-nums; }
+button.hp-dmg { background: #d23b2b; }
+button.hp-heal { background: #2f9446; }
+button.hp-dmg:hover:not(:disabled) { background: #b52f21; }
+button.hp-heal:hover:not(:disabled) { background: #267a3a; }
 
 .bt-row { display: grid; grid-template-columns: 8.6em 4.8em 3.8em auto auto auto 1fr; gap: 6px; align-items: center; padding: 3px 0; border-bottom: 1px dashed var(--dh-soft); }
 .bt-head { border: none; padding: 0; font-size: .75em; color: var(--muted); text-align: center; }

@@ -39,6 +39,19 @@ export const STATUS_EFFECTS = [
   'Schlafend', 'Eingefroren', 'Verwirrt', 'Zurückgeschreckt', 'Verflucht',
 ];
 
+/** Farbe je Statuseffekt (Hintergrund, wenn aktiv); fg = Schriftfarbe auf hellen Farben. */
+export const STATUS_COLORS = {
+  Verbrannt: { c: '#e2621b' },
+  Vergiftet: { c: '#a04fc4' },
+  'Schwer vergiftet': { c: '#6b2a8f' },
+  Paralysiert: { c: '#e8c000', fg: '#2a2400' },
+  Schlafend: { c: '#7d8a9b' },
+  Eingefroren: { c: '#2f9fcc' },
+  Verwirrt: { c: '#d6478f' },
+  Zurückgeschreckt: { c: '#8c6a48' },
+  Verflucht: { c: '#4b3f78' },
+};
+
 export const GENDERS = { male: '♂', female: '♀', neutral: '○' };
 
 // Ein Pokémon hat 1–2 Typen; ein dritter ist nur als Ausnahme (🔓 Custom-Form) möglich.
